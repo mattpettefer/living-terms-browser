@@ -1,13 +1,18 @@
 import type { Destination, DestinationId } from './types';
 
 export const DESTINATIONS: readonly Destination[] = [
-  { id: 'campus-life', name: 'Campus Life' },
-  { id: 'academics-careers', name: 'Academics & Careers' },
-  { id: 'university-news', name: 'University News' },
-  { id: 'alumni-community', name: 'Alumni & Community' },
-  { id: 'health-wellness', name: 'Health & Wellness' },
-  { id: 'athletics', name: 'Athletics' },
+  { id: 'campus-life', name: 'Campus Life', color: '#2563eb' },
+  { id: 'academics-careers', name: 'Academics & Careers', color: '#7c3aed' },
+  { id: 'university-news', name: 'University News', color: '#0f766e' },
+  { id: 'alumni-community', name: 'Alumni & Community', color: '#c2410c' },
+  { id: 'health-wellness', name: 'Health & Wellness', color: '#15803d' },
+  { id: 'athletics', name: 'Athletics', color: '#a21caf' },
 ];
+
+/** Inline CSS custom properties exposing each destination color to the stylesheet. */
+export function destinationColorVars(): Record<string, string> {
+  return Object.fromEntries(DESTINATIONS.map((d) => [`--ltb-dest-${d.id}`, d.color]));
+}
 
 export const DESTINATION_IDS: readonly DestinationId[] = DESTINATIONS.map((d) => d.id);
 

@@ -1,17 +1,17 @@
 import { useEffect } from 'preact/hooks';
 import { isDestinationId } from '../state/destinations';
 import { useStore } from '../state/provider';
-import type { DestinationId } from '../state/types';
+import type { ConfigTab, DestinationId } from '../state/types';
 
 export type Route =
   | { view: 'overview'; category: DestinationId | 'all' }
-  | { view: 'config'; category: DestinationId }
+  | { view: 'config'; category: ConfigTab }
   | { view: 'article'; postId: number };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const [head, arg] = parts;
-  if (head === 'config') return { view: 'config', category: isDestinationId(arg) ? arg : 'campus-life' };
+  if (head === 'config') return { view: 'config', category: isDestinationId(arg) || arg === 'unassigned' ? arg : 'campus-life' };
   if (head === 'article' && arg && /^\d+$/.test(arg)) return { view: 'article', postId: Number(arg) };
   return { view: 'overview', category: isDestinationId(arg) ? arg : 'all' };
 }

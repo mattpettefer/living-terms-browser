@@ -87,6 +87,15 @@ export function getVisibleTerms(state: AppState, search: string, categoriesOnly 
   return out;
 }
 
+/** Stable partition: terms owned by `destinationId` first, everything else after, preserving alphabetical order within each group. */
+export function sortSelectedFirst(terms: SourceTerm[], assignments: Assignments, destinationId: DestinationId | 'unassigned'): SourceTerm[] {
+  if (destinationId === 'unassigned') return terms;
+  const selected: SourceTerm[] = [];
+  const rest: SourceTerm[] = [];
+  for (const t of terms) (assignments[t.key] === destinationId ? selected : rest).push(t);
+  return selected.length ? [...selected, ...rest] : terms;
+}
+
 export function getOverviewResults(state: AppState, queryKey: string): PostRecord[] {
   const entry = state.queriesByKey[queryKey];
   if (!entry) return [];

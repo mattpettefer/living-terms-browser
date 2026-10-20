@@ -2,6 +2,7 @@ import { useHashRouter } from './effects/useHashRouter';
 import { usePersistence } from './effects/usePersistence';
 import { useTermInventory } from './effects/useTermInventory';
 import type { PersistenceAdapter } from './services/persistence';
+import { destinationColorVars } from './state/destinations';
 import { useStore } from './state/provider';
 import { ArticleView } from './views/ArticleView';
 import { Config } from './views/Config';
@@ -15,7 +16,7 @@ export function App({ persistence }: { persistence: PersistenceAdapter }) {
   const view = state.ui.view;
 
   return (
-    <div class="ltb-app">
+    <div class="ltb-app" style={destinationColorVars()}>
       <header class="ltb-header">
         <div class="ltb-brand">
           <span class="ltb-brand-title">Living Term Browser</span>

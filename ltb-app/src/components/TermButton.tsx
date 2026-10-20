@@ -1,5 +1,5 @@
 import { useId, useState } from 'preact/hooks';
-import type { SourceTerm } from '../state/types';
+import type { DestinationId, SourceTerm } from '../state/types';
 
 export interface TermButtonProps {
   term: SourceTerm;
@@ -7,6 +7,8 @@ export interface TermButtonProps {
   selected?: boolean;
   /** Flagged red because it contributes to a multi-destination overlap on an article. */
   warning?: boolean;
+  /** Destination that owns this term; drives the color coding. */
+  owner?: DestinationId | null;
   /** Tooltip text shown on hover, focus, and tap. */
   tooltip?: string | null;
   /** Secondary detail, e.g. source ID for duplicate labels. */
@@ -19,11 +21,13 @@ export interface TermButtonProps {
  * Uniform rounded control for a source term. Categories and tags look
  * identical; taxonomy is only exposed in the disambiguation detail.
  */
-export function TermButton({ term, selected = false, warning = false, tooltip, detail, disabled, onClick }: TermButtonProps) {
+export function TermButton({ term, selected = false, warning = false, owner = null, tooltip, detail, disabled, onClick }: TermButtonProps) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
   const hasTip = !!tooltip || !!detail;
-  const cls = ['ltb-term', selected && 'is-selected', warning && 'is-warning', open && hasTip && 'is-open'].filter(Boolean).join(' ');
+  const cls = ['ltb-term', selected && 'is-selected', owner && 'is-owned', warning && 'is-warning', open && hasTip && 'is-open']
+    .filter(Boolean)
+    .join(' ');
 
   const toggle = () => {
     if (onClick) onClick(term);
@@ -35,6 +39,7 @@ export function TermButton({ term, selected = false, warning = false, tooltip, d
       <button
         type="button"
         class={cls}
+        data-destination={owner ?? undefined}
         aria-pressed={onClick ? selected : undefined}
         aria-describedby={hasTip ? tipId : undefined}
         disabled={disabled}

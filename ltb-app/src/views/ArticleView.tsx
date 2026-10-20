@@ -61,8 +61,8 @@ export function ArticleView() {
               <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer">View on living.life.edu ↗</a>
             </p>
             {matched.length > 0 && (
-              <p class={`ltb-article-destinations${overlap ? ' is-warning' : ''}`} role={overlap ? 'alert' : undefined}>
-                {overlap ? <strong>Multiple categories: </strong> : <strong>Category: </strong>}
+              <p class="ltb-article-destinations">
+                <strong>{matched.length > 1 ? 'Categories: ' : 'Category: '}</strong>
                 {joinNames(matched)}
               </p>
             )}

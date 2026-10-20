@@ -13,7 +13,13 @@ export type RequestStatus = 'idle' | 'loading' | 'success' | 'error';
 export interface Destination {
   id: DestinationId;
   name: string;
+  /** Accent color used wherever this destination's ownership is shown. */
+  color: string;
 }
+
+export type TermSort = 'alpha' | 'selected-first';
+/** Config tabs: one per destination plus a view of terms not yet assigned anywhere. */
+export type ConfigTab = DestinationId | 'unassigned';
 
 export interface SourceTerm {
   key: TermKey;
@@ -88,9 +94,10 @@ export interface AppState {
     overviewCategory: DestinationId | 'all';
     overviewPage: number;
     overviewScrollY: number;
-    activeConfigCategory: DestinationId;
+    activeConfigCategory: ConfigTab;
     termSearch: string;
     categoriesOnly: boolean;
+    termSort: TermSort;
     selectedPostId: number | null;
     pendingTermMove: PendingTermMove | null;
   };

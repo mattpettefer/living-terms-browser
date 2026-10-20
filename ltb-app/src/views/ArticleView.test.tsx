@@ -62,7 +62,7 @@ describe('ArticleView overlap rendering', () => {
       host,
     );
 
-    expect(host.querySelector('.ltb-article-destinations')?.textContent).toContain('Multiple categories');
+    expect(host.querySelector('.ltb-article-destinations')?.textContent).toBe('Categories: Athletics and Campus Life');
     const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ltb-article-sidebar .ltb-term')];
     const byName = Object.fromEntries(buttons.map((b) => [b.querySelector('.ltb-term-label')!.textContent, b]));
 

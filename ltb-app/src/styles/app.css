@@ -125,7 +125,6 @@
   transition: box-shadow 0.15s, transform 0.15s;
 }
 .ltb-card:hover { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); transform: translateY(-1px); }
-.ltb-card.has-overlap { border-color: #f59e0b; }
 .ltb-card-link { display: flex; flex-direction: column; flex: 1; color: inherit; text-decoration: none; }
 .ltb-card-media { aspect-ratio: 16 / 9; background: var(--ltb-surface); overflow: hidden; }
 .ltb-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -159,7 +158,6 @@
   border-top: 1px solid var(--ltb-border);
   font-size: 0.82rem;
 }
-.ltb-card-destinations { color: var(--ltb-muted); flex: 1 1 100%; }
 .ltb-source-link { margin-left: auto; color: var(--ltb-accent); text-decoration: none; }
 .ltb-source-link:hover { text-decoration: underline; }
 
@@ -194,6 +192,24 @@
 }
 @keyframes ltb-spin { to { transform: rotate(360deg); } }
 
+/* Destination color coding. Values are injected as --ltb-dest-<id> on .ltb-app. */
+.ltb-root [data-destination='campus-life'] { --dest: var(--ltb-dest-campus-life); }
+.ltb-root [data-destination='academics-careers'] { --dest: var(--ltb-dest-academics-careers); }
+.ltb-root [data-destination='university-news'] { --dest: var(--ltb-dest-university-news); }
+.ltb-root [data-destination='alumni-community'] { --dest: var(--ltb-dest-alumni-community); }
+.ltb-root [data-destination='health-wellness'] { --dest: var(--ltb-dest-health-wellness); }
+.ltb-root [data-destination='athletics'] { --dest: var(--ltb-dest-athletics); }
+.ltb-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dest, var(--ltb-border));
+  flex: none;
+}
+.ltb-swatch-lg { width: 14px; height: 14px; }
+.ltb-config-title { display: inline-flex; align-items: center; gap: 10px; }
+
 /* Terms */
 .ltb-term-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .ltb-term-wrap { position: relative; display: inline-block; }
@@ -210,7 +226,18 @@
   max-width: 100%;
 }
 .ltb-term:hover { border-color: var(--ltb-text); }
-.ltb-term.is-selected { background: var(--ltb-accent); border-color: var(--ltb-accent); color: #fff; font-weight: 600; }
+/* Owned by another destination: tinted in that destination's color. */
+.ltb-term.is-owned {
+  --tint: color-mix(in srgb, var(--dest, var(--ltb-accent)) 14%, #fff);
+  background: var(--tint);
+  border-color: var(--dest, var(--ltb-accent));
+  color: color-mix(in srgb, var(--dest, var(--ltb-accent)) 85%, #000);
+  font-weight: 600;
+}
+.ltb-term.is-owned:hover { background: color-mix(in srgb, var(--dest, var(--ltb-accent)) 24%, #fff); }
+/* Owned by the current tab: solid fill. */
+.ltb-term.is-selected,
+.ltb-term.is-selected:hover { background: var(--dest, var(--ltb-accent)); border-color: var(--dest, var(--ltb-accent)); color: #fff; font-weight: 600; }
 .ltb-term.is-warning { background: var(--ltb-danger-soft); border-color: var(--ltb-danger); color: var(--ltb-danger); font-weight: 600; }
 .ltb-term-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ltb-term-warning-icon {
@@ -258,8 +285,27 @@
   color: var(--ltb-muted);
 }
 .ltb-tab:hover { color: var(--ltb-text); }
-.ltb-tab.is-active { color: var(--ltb-accent); border-bottom-color: var(--ltb-accent); }
+.ltb-tab.is-active { color: var(--dest, var(--ltb-accent)); border-bottom-color: var(--dest, var(--ltb-accent)); }
 .ltb-tab-count { font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: var(--ltb-surface); color: var(--ltb-text); }
+.ltb-tab.is-active .ltb-tab-count { background: var(--dest, var(--ltb-accent)); color: #fff; }
+.ltb-tab-unassigned { margin-left: auto; --dest: var(--ltb-muted); }
+.ltb-tab-unassigned .ltb-swatch { background: transparent; border: 2px dashed var(--ltb-muted); }
+
+/* Destination chooser (Unassigned tab) */
+.ltb-assign-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.ltb-assign-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--ltb-border);
+  background: var(--ltb-bg);
+  font-weight: 600;
+  text-align: left;
+}
+.ltb-assign-option:hover { background: color-mix(in srgb, var(--dest) 14%, #fff); border-color: var(--dest); color: color-mix(in srgb, var(--dest) 85%, #000); }
+@media (max-width: 480px) { .ltb-assign-options { grid-template-columns: 1fr; } }
 .ltb-config-header { margin-bottom: 14px; }
 .ltb-config-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 14px; }
 .ltb-search input {

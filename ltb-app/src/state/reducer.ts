@@ -2,22 +2,25 @@ import { DESTINATIONS } from './destinations';
 import type {
   AppState,
   Assignments,
+  ConfigTab,
   DestinationId,
   PostRecord,
   SourceTerm,
   TermKey,
+  TermSort,
   UnresolvedAssignment,
 } from './types';
 
 export type Action =
   | { type: 'NAVIGATE'; view: 'overview' }
-  | { type: 'NAVIGATE'; view: 'config'; category?: DestinationId }
+  | { type: 'NAVIGATE'; view: 'config'; category?: ConfigTab }
   | { type: 'NAVIGATE'; view: 'article'; postId: number }
   | { type: 'SET_OVERVIEW_CATEGORY'; category: DestinationId | 'all' }
   | { type: 'SET_OVERVIEW_SCROLL'; scrollY: number }
-  | { type: 'SET_CONFIG_CATEGORY'; category: DestinationId }
+  | { type: 'SET_CONFIG_CATEGORY'; category: ConfigTab }
   | { type: 'SET_TERM_SEARCH'; search: string }
   | { type: 'SET_CATEGORIES_ONLY'; categoriesOnly: boolean }
+  | { type: 'SET_TERM_SORT'; termSort: TermSort }
   | { type: 'TERMS_LOAD_START'; requestId: string }
   | { type: 'TERMS_PAGE_LOADED'; requestId: string; terms: SourceTerm[]; loadedPages: number; totalPages: number | null }
   | { type: 'TERMS_LOAD_COMPLETE'; requestId: string; excludedTermKeys: TermKey[] }
@@ -67,7 +70,8 @@ export function createInitialState(source: AppState['source'], saved?: { assignm
       overviewScrollY: 0,
       activeConfigCategory: 'campus-life',
       termSearch: '',
-      categoriesOnly: false,
+      categoriesOnly: true,
+      termSort: 'selected-first',
       selectedPostId: null,
       pendingTermMove: null,
     },
@@ -147,6 +151,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, ui: { ...state.ui, termSearch: action.search } };
     case 'SET_CATEGORIES_ONLY':
       return { ...state, ui: { ...state.ui, categoriesOnly: action.categoriesOnly } };
+    case 'SET_TERM_SORT':
+      return { ...state, ui: { ...state.ui, termSort: action.termSort } };
 
     case 'TERMS_LOAD_START':
       return {

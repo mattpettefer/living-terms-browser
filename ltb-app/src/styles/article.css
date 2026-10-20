@@ -23,7 +23,6 @@
   background: var(--ltb-accent-soft);
   color: var(--ltb-accent-text);
 }
-.ltb-article-destinations.is-warning { background: var(--ltb-warn-soft); color: var(--ltb-warn); }
 .ltb-article-featured { width: 100%; height: auto; border-radius: var(--ltb-radius); margin-bottom: 20px; display: block; }
 
 .ltb-render-notice {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, reducer, type Action } from './reducer';
-import { getPostMatches, getPostOverlap, getTermWarning, getVisibleTerms } from './selectors';
+import { getPostMatches, getPostOverlap, getTermWarning, getVisibleTerms, sortSelectedFirst } from './selectors';
 import type { AppState, PostRecord, SourceTerm } from './types';
 
 const source = { baseUrl: 'https://example.test', postsRestBase: 'posts' };
@@ -178,5 +178,16 @@ describe('visible terms', () => {
     expect(getVisibleTerms(s, 'nutr')).toHaveLength(2);
     expect(getVisibleTerms(s, '', true).map((t) => t.key)).toEqual(['category:10']);
     expect(getVisibleTerms(s, 'nutr', true)).toHaveLength(1);
+  });
+
+  it('selected-first sort moves only the current tab\'s terms up, keeping alphabetical order', () => {
+    const s = run(
+      withInventory(),
+      { type: 'ASSIGN_TERM', termKey: 'post_tag:40', destination: 'athletics' },
+      { type: 'ASSIGN_TERM', termKey: 'category:10', destination: 'campus-life' },
+    );
+    const alpha = getVisibleTerms(s, '');
+    expect(sortSelectedFirst(alpha, s.assignments, 'athletics').map((t) => t.key)).toEqual(['post_tag:40', 'post_tag:20', 'category:10']);
+    expect(sortSelectedFirst(alpha, s.assignments, 'university-news')).toBe(alpha);
   });
 });

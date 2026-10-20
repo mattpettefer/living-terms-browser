@@ -1,7 +1,6 @@
 import { destinationName } from '../state/destinations';
 import type { DestinationId, PostRecord } from '../state/types';
 import { stripTags } from '../services/normalize';
-import { joinNames } from '../state/selectors';
 import { routeToHash } from '../effects/useHashRouter';
 
 interface Props {
@@ -15,11 +14,10 @@ export function formatDate(iso: string): string {
 }
 
 export function PostCard({ post, matchedDestinations }: Props) {
-  const overlap = matchedDestinations.length > 1;
   const excerpt = stripTags(post.excerptHtml);
   const href = routeToHash({ view: 'article', postId: post.id });
   return (
-    <article class={`ltb-card${overlap ? ' has-overlap' : ''}`}>
+    <article class="ltb-card">
       <a class="ltb-card-link" href={href}>
         <div class="ltb-card-media">
           {post.imageUrl ? (
@@ -40,16 +38,15 @@ export function PostCard({ post, matchedDestinations }: Props) {
         </div>
       </a>
       <div class="ltb-card-footer">
-        {overlap ? (
-          <span class="ltb-pill ltb-pill-warning" title={`Matches ${joinNames(matchedDestinations)}`}>
-            <span aria-hidden="true">! </span>Multiple categories
-          </span>
-        ) : matchedDestinations.length === 1 ? (
-          <span class="ltb-pill">{destinationName(matchedDestinations[0]!)}</span>
-        ) : (
+        {matchedDestinations.length === 0 ? (
           <span class="ltb-pill ltb-pill-muted">Unassigned</span>
+        ) : (
+          matchedDestinations.map((d) => (
+            <span key={d} class="ltb-pill">
+              {destinationName(d)}
+            </span>
+          ))
         )}
-        {overlap && <span class="ltb-card-destinations">{matchedDestinations.map(destinationName).join(' · ')}</span>}
         <a class="ltb-source-link" href={post.sourceUrl} target="_blank" rel="noopener noreferrer">
           Source ↗
         </a>
