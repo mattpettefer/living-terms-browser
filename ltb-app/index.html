@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Living Term Browser (local)</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; }
+      .site-chrome { padding: 12px 24px; background: #1f2937; color: #fff; font-size: 14px; }
+      main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    </style>
+  </head>
+  <body>
+    <div class="site-chrome">Local dev shell — the shortcode on the WordPress server renders the same mount element below.</div>
+    <main>
+      <div data-ltb-app data-source-url="https://living.life.edu" data-posts-rest-base="posts"></div>
+    </main>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

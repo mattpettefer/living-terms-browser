@@ -1,0 +1,28 @@
+{
+  "name": "ltb-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "private": "true",
+  "type": "module",
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "preact": "^11.0.1"
+  }
+}

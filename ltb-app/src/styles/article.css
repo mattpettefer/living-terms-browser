@@ -1,0 +1,73 @@
+.ltb-back { display: inline-block; margin-bottom: 16px; color: var(--ltb-accent); text-decoration: none; font-weight: 600; }
+.ltb-back:hover { text-decoration: underline; }
+
+.ltb-article-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 32px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .ltb-article-layout { grid-template-columns: minmax(0, 1fr); }
+}
+.ltb-article-main { min-width: 0; max-width: 760px; }
+.ltb-article-title { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; font-weight: 800; }
+.ltb-article-meta { color: var(--ltb-muted); margin: 0 0 10px; }
+.ltb-article-meta a { color: var(--ltb-accent); text-decoration: none; }
+.ltb-article-meta a:hover { text-decoration: underline; }
+.ltb-article-destinations {
+  display: inline-block;
+  margin: 0 0 16px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--ltb-accent-soft);
+  color: var(--ltb-accent-text);
+}
+.ltb-article-destinations.is-warning { background: var(--ltb-warn-soft); color: var(--ltb-warn); }
+.ltb-article-featured { width: 100%; height: auto; border-radius: var(--ltb-radius); margin-bottom: 20px; display: block; }
+
+.ltb-render-notice {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-left: 4px solid #f59e0b;
+  background: var(--ltb-warn-soft);
+  color: var(--ltb-warn);
+  border-radius: 6px;
+  font-size: 0.92rem;
+}
+.ltb-render-notice a { color: inherit; font-weight: 600; }
+
+.ltb-article-sidebar {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px solid var(--ltb-border);
+  border-radius: var(--ltb-radius);
+  background: var(--ltb-surface);
+}
+@media (max-width: 900px) {
+  .ltb-article-sidebar { position: static; }
+}
+.ltb-article-sidebar .ltb-term-list { gap: 6px; }
+.ltb-article-sidebar .ltb-term { background: var(--ltb-bg); }
+.ltb-article-sidebar .ltb-term.is-warning { background: var(--ltb-danger-soft); }
+.ltb-sidebar-warning { color: var(--ltb-danger); font-size: 0.9rem; margin: 0 0 10px; font-weight: 600; }
+
+/* Scoped styles for sanitized API content */
+.ltb-article-content { font-size: 1.05rem; line-height: 1.7; overflow-wrap: anywhere; }
+.ltb-article-content > :first-child { margin-top: 0; }
+.ltb-article-content h1, .ltb-article-content h2, .ltb-article-content h3, .ltb-article-content h4 { line-height: 1.3; margin: 1.4em 0 0.5em; }
+.ltb-article-content p { margin: 0 0 1em; }
+.ltb-article-content ul, .ltb-article-content ol { margin: 0 0 1em; padding-left: 1.5em; }
+.ltb-article-content img { max-width: 100%; height: auto; border-radius: 6px; }
+.ltb-article-content figure { margin: 1.2em 0; }
+.ltb-article-content figcaption { font-size: 0.85rem; color: var(--ltb-muted); text-align: center; margin-top: 6px; }
+.ltb-article-content blockquote { margin: 1.2em 0; padding: 4px 18px; border-left: 4px solid var(--ltb-border); color: var(--ltb-muted); }
+.ltb-article-content a { color: var(--ltb-accent); }
+.ltb-article-content iframe, .ltb-article-content video { max-width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
+.ltb-article-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+.ltb-article-content td, .ltb-article-content th { border: 1px solid var(--ltb-border); padding: 6px 10px; text-align: left; }
+.ltb-article-content .wp-block-image, .ltb-article-content .aligncenter { text-align: center; }
+.ltb-article-content .alignleft { float: left; margin: 0 1em 0.5em 0; }
+.ltb-article-content .alignright { float: right; margin: 0 0 0.5em 1em; }
+.ltb-article-content::after { content: ''; display: block; clear: both; }
