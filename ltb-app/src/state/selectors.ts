@@ -1,5 +1,5 @@
 import { destinationName } from './destinations';
-import type { AppState, Assignments, DestinationId, PostMatches, PostRecord, SourceTerm, TermKey } from './types';
+import type { AppState, Assignments, DestinationId, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
 
 export function getAssignedTerms(state: AppState, destinationId: DestinationId): SourceTerm[] {
   const out: SourceTerm[] = [];
@@ -87,24 +87,66 @@ export function getVisibleTerms(state: AppState, search: string, categoriesOnly 
   return out;
 }
 
-/** Stable partition: terms owned by `destinationId` first, everything else after, preserving alphabetical order within each group. */
-export function sortSelectedFirst(terms: SourceTerm[], assignments: Assignments, destinationId: DestinationId | 'unassigned'): SourceTerm[] {
-  if (destinationId === 'unassigned') return terms;
+/** Stable partition: selected terms first, everything else after, preserving alphabetical order within each group. */
+export function sortSelectedFirst(terms: SourceTerm[], isSelected: (term: SourceTerm) => boolean): SourceTerm[] {
   const selected: SourceTerm[] = [];
   const rest: SourceTerm[] = [];
-  for (const t of terms) (assignments[t.key] === destinationId ? selected : rest).push(t);
+  for (const t of terms) (isSelected(t) ? selected : rest).push(t);
   return selected.length ? [...selected, ...rest] : terms;
 }
 
-export function getOverviewResults(state: AppState, queryKey: string): PostRecord[] {
-  const entry = state.queriesByKey[queryKey];
-  if (!entry) return [];
-  const out: PostRecord[] = [];
-  for (const id of entry.postIds) {
+/**
+ * Client-side secondary filter: a set of AND requirements. A post passes only
+ * if it carries EVERY term in the filter, so each added term narrows the
+ * result. No-op when the filter is empty.
+ */
+export function applyTempFilter(posts: PostRecord[], tempFilterTermKeys: readonly TermKey[]): PostRecord[] {
+  if (tempFilterTermKeys.length === 0) return posts;
+  return posts.filter((p) => {
+    const have = new Set(p.termKeys);
+    return tempFilterTermKeys.every((k) => have.has(k));
+  });
+}
+
+export function getActiveTempFilter(state: AppState): TempFilter {
+  return state.tempFilters.find((f) => f.id === state.activeTempFilterId) ?? state.tempFilters[0]!;
+}
+
+export function getTempFilterTerms(state: AppState, filter: TempFilter = getActiveTempFilter(state)): Array<{ key: TermKey; term: SourceTerm | undefined }> {
+  return filter.termKeys.map((key) => ({ key, term: state.termsByKey[key] }));
+}
+
+export function getTempFilterTermCount(state: AppState): number {
+  return state.tempFilters.reduce((n, f) => n + f.termKeys.length, 0);
+}
+
+export interface OverviewResults {
+  /** Every indexed post matching the destination (or all) AND the temporary filter, newest first. */
+  matching: PostRecord[];
+  /** Posts matching the destination before the temporary filter is applied. */
+  primaryCount: number;
+  /** True when the destination has no assigned terms (so nothing can match by definition). */
+  emptyAssignment: boolean;
+}
+
+/**
+ * Overview lists are computed from the complete local index: a post matches a
+ * destination when any of its attached, non-excluded terms is assigned there
+ * (rule 3); then the active temporary filter narrows further (post must carry all of its terms). Posts are unique
+ * by construction, so a post with several matching terms appears once.
+ */
+export function getOverviewResults(state: AppState, category: DestinationId | 'all'): OverviewResults {
+  const excluded = getExcludedSet(state);
+  const emptyAssignment = category !== 'all' && getAssignedTermKeys(state.assignments, category).every((k) => excluded.has(k));
+  if (emptyAssignment) return { matching: [], primaryCount: 0, emptyAssignment };
+  const primary: PostRecord[] = [];
+  for (const id of state.postOrder) {
     const p = state.postsById[id];
-    if (p) out.push(p);
+    if (!p) continue;
+    if (category === 'all' || p.termKeys.some((k) => !excluded.has(k) && state.assignments[k] === category)) primary.push(p);
   }
-  return out;
+  const tempKeys = state.tempFilterEnabled ? getActiveTempFilter(state).termKeys : [];
+  return { matching: applyTempFilter(primary, tempKeys), primaryCount: primary.length, emptyAssignment };
 }
 
 export function getDuplicateNameCounts(state: AppState): Map<string, number> {

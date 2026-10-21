@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { App } from './app';
-import { localStorageAdapter, validateImport } from './services/persistence';
+import { loadTempFilters, localStorageAdapter, unwrapShortcode, validateImport } from './services/persistence';
+import type { TempFilterSnapshot } from './state/reducer';
 import { markSeedApplied, readSeedText, seedIsNew } from './services/seed';
 import { createInitialState, StoreProvider } from './state/provider';
 import type { AppState, Assignments, UnresolvedAssignment } from './state/types';
@@ -28,14 +29,19 @@ function loadSaved(sourceUrl: string): SavedConfig | undefined {
  * assignments) the first time a given seed text is seen for this source, so
  * editing the shortcode re-imports while ordinary page loads keep local edits.
  */
-function applySeed(el: HTMLElement, sourceUrl: string): SavedConfig | undefined {
-  const text = readSeedText(el);
-  if (!text || !seedIsNew(sourceUrl, text)) return undefined;
+function applySeed(text: string | null, sourceUrl: string, hasSaved: boolean): (SavedConfig & { tempFilters: TempFilterSnapshot | null }) | undefined {
+  if (!text) return undefined;
+  // Re-apply when the shortcode content changed, or when this browser has no saved mapping at all.
+  if (!seedIsNew(sourceUrl, text) && hasSaved) {
+    console.info('[ltb] Page configuration unchanged since last import; keeping local edits. Use "Re-import page configuration" in Config to reset.');
+    return undefined;
+  }
   try {
-    const r = validateImport(JSON.parse(text), { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
+    const r = validateImport(JSON.parse(unwrapShortcode(text)), { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
     markSeedApplied(sourceUrl, text);
     for (const w of r.warnings) console.warn('[ltb] seed:', w);
-    return { assignments: r.assignments, unresolved: r.unresolved };
+    console.info(`[ltb] Imported ${Object.keys(r.assignments).length} assignments from page configuration.`);
+    return { assignments: r.assignments, unresolved: r.unresolved, tempFilters: r.tempFilters };
   } catch (e) {
     console.error('[ltb] Shortcode configuration could not be imported:', e);
     return undefined;
@@ -52,8 +58,10 @@ function mount(el: HTMLElement) {
     postsRestBase: el.dataset.postsRestBase || 'posts',
   };
 
-  const seeded = applySeed(el, source.baseUrl);
-  const initial: AppState = createInitialState(source, seeded ?? loadSaved(source.baseUrl));
+  const seedText = readSeedText(el);
+  const saved = loadSaved(source.baseUrl);
+  const seeded = applySeed(seedText, source.baseUrl, !!saved && Object.keys(saved.assignments).length > 0);
+  const initial: AppState = createInitialState(source, seeded ?? saved, seeded?.tempFilters ?? loadTempFilters(source.baseUrl), seedText);
   if (seeded) initial.persistence = { ...initial.persistence, status: 'unsaved' };
 
   render(

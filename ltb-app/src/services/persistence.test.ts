@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateImport } from './persistence';
+import { unwrapShortcode, validateImport, wrapAsShortcode } from './persistence';
 
 const ctx = { sourceUrl: 'https://living.life.edu', excludedTermKeys: new Set<'category:30'>(['category:30']), knownTermKeys: null };
 
@@ -32,6 +32,19 @@ describe('validateImport', () => {
       expect.stringMatching(/excluded/),
       expect.stringMatching(/not found/),
     ]);
+  });
+
+  it('round-trips the shortcode wrapper and tolerates bare JSON', () => {
+    const json = '{ "assignments": {} }';
+    expect(unwrapShortcode(wrapAsShortcode(json))).toBe(json);
+    expect(unwrapShortcode(`  ${json}\n`)).toBe(json);
+    expect(unwrapShortcode('[living_term_browser source="x"]\n{"a":1}\n[/living_term_browser]')).toBe('{"a":1}');
+  });
+
+  it('temp filters are optional extra info: absent leaves null, present is parsed', () => {
+    expect(validateImport({ assignments: {} }, ctx).tempFilters).toBeNull();
+    const r = validateImport({ assignments: {}, tempFilters: { filters: [{ id: 'a', name: 'Sports', termKeys: ['category:1', 'bogus'] }], activeId: 'a' } }, ctx);
+    expect(r.tempFilters).toEqual({ filters: [{ id: 'a', name: 'Sports', termKeys: ['category:1'] }], activeId: 'a', enabled: true });
   });
 
   it('warns on a different source url and rejects a newer schema', () => {

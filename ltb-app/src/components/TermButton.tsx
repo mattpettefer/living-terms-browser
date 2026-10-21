@@ -9,6 +9,8 @@ export interface TermButtonProps {
   warning?: boolean;
   /** Destination that owns this term; drives the color coding. */
   owner?: DestinationId | null;
+  /** 'filter' renders the selected state in the neutral temporary-filter style instead of a destination color. */
+  tone?: 'destination' | 'filter';
   /** Tooltip text shown on hover, focus, and tap. */
   tooltip?: string | null;
   /** Secondary detail, e.g. source ID for duplicate labels. */
@@ -21,11 +23,11 @@ export interface TermButtonProps {
  * Uniform rounded control for a source term. Categories and tags look
  * identical; taxonomy is only exposed in the disambiguation detail.
  */
-export function TermButton({ term, selected = false, warning = false, owner = null, tooltip, detail, disabled, onClick }: TermButtonProps) {
+export function TermButton({ term, selected = false, warning = false, owner = null, tone = 'destination', tooltip, detail, disabled, onClick }: TermButtonProps) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
   const hasTip = !!tooltip || !!detail;
-  const cls = ['ltb-term', selected && 'is-selected', owner && 'is-owned', warning && 'is-warning', open && hasTip && 'is-open']
+  const cls = ['ltb-term', tone === 'filter' && 'is-filter', selected && 'is-selected', owner && 'is-owned', warning && 'is-warning', open && hasTip && 'is-open']
     .filter(Boolean)
     .join(' ');
 

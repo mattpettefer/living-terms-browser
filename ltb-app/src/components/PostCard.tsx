@@ -5,6 +5,7 @@ import { routeToHash } from '../effects/useHashRouter';
 
 interface Props {
   post: PostRecord;
+  imageUrl: string | null;
   matchedDestinations: DestinationId[];
 }
 
@@ -13,15 +14,15 @@ export function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export function PostCard({ post, matchedDestinations }: Props) {
+export function PostCard({ post, imageUrl, matchedDestinations }: Props) {
   const excerpt = stripTags(post.excerptHtml);
   const href = routeToHash({ view: 'article', postId: post.id });
   return (
     <article class="ltb-card">
       <a class="ltb-card-link" href={href}>
         <div class="ltb-card-media">
-          {post.imageUrl ? (
-            <img src={post.imageUrl} alt="" loading="lazy" />
+          {imageUrl ? (
+            <img src={imageUrl} alt="" loading="lazy" />
           ) : (
             <div class="ltb-card-placeholder" aria-hidden="true">
               <span>No image</span>

@@ -58,8 +58,9 @@ function ltb_clean_seed( $content ) {
 	$text = preg_replace( '#</?p[^>]*>#i', "\n", $text );
 	$text = wp_strip_all_tags( $text );
 	$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-	$text = str_replace( array( "\xE2\x80\x9C", "\xE2\x80\x9D", "\xE2\x80\x9E" ), '"', $text );
-	$text = str_replace( array( "\xE2\x80\x98", "\xE2\x80\x99", "\xE2\x80\x9A" ), "'", $text );
+	// Curly quotes, and the primes wptexturize produces for a quote following a digit (e.g. "category:1478").
+	$text = str_replace( array( "\xE2\x80\x9C", "\xE2\x80\x9D", "\xE2\x80\x9E", "\xE2\x80\xB3" ), '"', $text );
+	$text = str_replace( array( "\xE2\x80\x98", "\xE2\x80\x99", "\xE2\x80\x9A", "\xE2\x80\xB2" ), "'", $text );
 	$text = str_replace( "\xC2\xA0", ' ', $text );
 	return trim( $text );
 }

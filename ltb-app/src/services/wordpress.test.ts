@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPosts, fetchTermInventory } from './wordpress';
+import { fetchMediaBatch, fetchPostIndex, fetchTermInventory } from './wordpress';
 
 const cfg = { baseUrl: 'https://living.life.edu', postsRestBase: 'posts' };
 
@@ -9,45 +9,59 @@ function jsonResponse(body: unknown, headers: Record<string, string> = {}) {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('fetchPosts', () => {
-  it('sends sorted exact IDs with OR relation and keeps complete term arrays', async () => {
-    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse(
-        [{ id: 5, date: '2024-01-01T00:00:00', modified: '2024-01-01T00:00:00', link: 'https://living.life.edu/a/', title: { rendered: 'A &amp; B' }, categories: [173, 9], tags: [111] }],
-        { 'X-WP-Total': '106', 'X-WP-TotalPages': '5' },
-      ),
-    );
-    const r = await fetchPosts(cfg, { categoryIds: [173, 2], tagIds: [111], page: 2 });
+describe('fetchPostIndex', () => {
+  it('pages through every post with full term arrays and no embeds, reporting progress', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const u = new URL(String(input));
+      const page = Number(u.searchParams.get('page'));
+      return jsonResponse(
+        [{ id: page, date: `2024-0${page}-01T00:00:00`, modified: '2024-01-01T00:00:00', link: `https://living.life.edu/${page}/`, title: { rendered: 'A &amp; B' }, categories: [173, 9], tags: [111] }],
+        { 'X-WP-Total': '3', 'X-WP-TotalPages': '3' },
+      );
+    });
+    const seen: number[] = [];
+    let last: { loadedPages: number; totalPages: number | null } | null = null;
+    await fetchPostIndex(cfg, (p) => {
+      seen.push(...p.posts.map((x) => x.id));
+      last = { loadedPages: p.loadedPages, totalPages: p.totalPages };
+    });
+    expect(spy).toHaveBeenCalledTimes(3);
     const url = new URL(spy.mock.calls[0]![0] as string);
     expect(url.pathname).toBe('/wp-json/wp/v2/posts');
-    expect(url.searchParams.get('categories')).toBe('2,173');
-    expect(url.searchParams.get('tags')).toBe('111');
-    expect(url.searchParams.get('tax_relation')).toBe('OR');
-    expect(url.searchParams.get('page')).toBe('2');
+    expect(url.searchParams.get('per_page')).toBe('100');
     expect(url.searchParams.get('_fields')).toContain('categories');
-    expect(url.searchParams.get('_fields')).toContain('_links');
-    expect(url.searchParams.get('_embed')).toContain('wp:featuredmedia');
-    expect(r.total).toBe(106);
-    expect(r.totalPages).toBe(5);
-    expect(r.posts[0]?.title).toBe('A & B');
-    expect(r.posts[0]?.termKeys).toEqual(['category:173', 'category:9', 'post_tag:111']);
-    expect(r.posts[0]?.termsComplete).toBe(true);
-  });
-
-  it('omits empty filters and tax_relation for a single taxonomy / all posts', async () => {
-    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse([]));
-    await fetchPosts(cfg, { categoryIds: [], tagIds: [4], page: 1 });
-    const u1 = new URL(spy.mock.calls[0]![0] as string);
-    expect(u1.searchParams.has('categories')).toBe(false);
-    expect(u1.searchParams.has('tax_relation')).toBe(false);
-    await fetchPosts(cfg, { categoryIds: [], tagIds: [], page: 1 });
-    const u2 = new URL(spy.mock.calls[1]![0] as string);
-    expect(u2.searchParams.has('tags')).toBe(false);
+    expect(url.searchParams.get('_fields')).toContain('tags');
+    expect(url.searchParams.has('_embed')).toBe(false);
+    expect(seen.sort()).toEqual([1, 2, 3]);
+    expect(last).toEqual({ loadedPages: 3, totalPages: 3 });
   });
 
   it('surfaces HTTP errors with status', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 503 }));
-    await expect(fetchPosts(cfg, { categoryIds: [1], tagIds: [], page: 1 })).rejects.toThrow(/503/);
+    await expect(fetchPostIndex(cfg, () => {})).rejects.toThrow(/503/);
+  });
+});
+
+describe('fetchMediaBatch', () => {
+  it('requests unique ids in one call and resolves missing media to null', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      jsonResponse([
+        { id: 5, source_url: 'https://x/full.jpg', media_details: { sizes: { medium_large: { source_url: 'https://x/ml.jpg' } } } },
+        { id: 7, source_url: 'https://x/only.jpg' },
+      ]),
+    );
+    const r = await fetchMediaBatch(cfg, [7, 5, 5, 9, 0]);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const u = new URL(spy.mock.calls[0]![0] as string);
+    expect(u.pathname).toBe('/wp-json/wp/v2/media');
+    expect(u.searchParams.get('include')).toBe('5,7,9');
+    expect(r).toEqual({ 5: 'https://x/ml.jpg', 7: 'https://x/only.jpg', 9: null });
+  });
+
+  it('skips the request when there is nothing to resolve', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    expect(await fetchMediaBatch(cfg, [0])).toEqual({});
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 

@@ -11,7 +11,7 @@ export type Route =
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const [head, arg] = parts;
-  if (head === 'config') return { view: 'config', category: isDestinationId(arg) || arg === 'unassigned' ? arg : 'campus-life' };
+  if (head === 'config') return { view: 'config', category: isDestinationId(arg) || arg === 'unassigned' || arg === 'temp-filter' ? arg : 'campus-life' };
   if (head === 'article' && arg && /^\d+$/.test(arg)) return { view: 'article', postId: Number(arg) };
   return { view: 'overview', category: isDestinationId(arg) ? arg : 'all' };
 }

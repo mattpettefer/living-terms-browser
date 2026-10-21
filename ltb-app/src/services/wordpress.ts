@@ -8,14 +8,8 @@ export interface SourceConfig {
 }
 
 export const PER_PAGE = 100;
-export const POSTS_PAGE_SIZE = 24;
-/** Conservative limit below common 8 KB server URL caps. */
-export const MAX_URL_LENGTH = 6000;
 const CONCURRENCY = 3;
 
-const CARD_FIELDS = ['id', 'date', 'modified', 'link', 'title', 'excerpt', 'featured_media', 'categories', 'tags', '_links', '_embedded'];
-const ARTICLE_FIELDS = [...CARD_FIELDS, 'content'];
-const EMBED = 'wp:featuredmedia,wp:term';
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -134,124 +128,85 @@ export async function fetchTermInventory(
   await runQueue(remaining, CONCURRENCY);
 }
 
+
 /* ---------------------------------- Posts ---------------------------------- */
 
-export interface PostsQuery {
-  categoryIds: number[];
-  tagIds: number[];
-  page: number;
-  perPage?: number;
-}
+const INDEX_FIELDS = ['id', 'date', 'modified', 'link', 'title', 'excerpt', 'featured_media', 'categories', 'tags'];
+const ARTICLE_FIELDS = [...INDEX_FIELDS, 'content', '_links', '_embedded'];
+const EMBED = 'wp:featuredmedia,wp:term';
 
-export interface PostsResult {
+export interface IndexProgress {
   posts: PostRecord[];
-  terms: SourceTerm[];
-  total: number | null;
+  loadedPages: number;
   totalPages: number | null;
-  /** True when results came from the locally filtered index fallback. */
-  fromIndex: boolean;
-}
-
-function postsUrl(cfg: SourceConfig, q: PostsQuery, fields: string[]): string {
-  const cats = [...q.categoryIds].sort((a, b) => a - b);
-  const tags = [...q.tagIds].sort((a, b) => a - b);
-  return buildUrl(`${restRoot(cfg)}/${cfg.postsRestBase}`, {
-    per_page: q.perPage ?? POSTS_PAGE_SIZE,
-    page: q.page,
-    orderby: 'date',
-    order: 'desc',
-    status: 'publish',
-    categories: cats.length ? cats.join(',') : undefined,
-    tags: tags.length ? tags.join(',') : undefined,
-    tax_relation: cats.length && tags.length ? 'OR' : undefined,
-    _fields: fields.join(','),
-    _embed: EMBED,
-  });
-}
-
-function collectTerms(raws: WpPost[]): SourceTerm[] {
-  const seen = new Map<string, SourceTerm>();
-  for (const raw of raws) for (const t of embeddedTerms(raw)) seen.set(t.key, t);
-  return [...seen.values()];
+  totalPosts: number | null;
 }
 
 /**
- * One combined request per results page. When neither filter is provided this
- * is an unfiltered "All Posts" query; callers must never pass empty filters for
- * a destination (an empty destination has no matching posts by definition).
+ * Fetch the complete lightweight post index (no embeds: ~80 KB per 100 posts
+ * versus ~850 KB with featured media embedded). Every page carries full
+ * category/tag ID arrays, so destination matching, overlap detection and the
+ * temporary filter can all run locally with exact semantics.
  */
-export async function fetchPosts(cfg: SourceConfig, q: PostsQuery, signal?: AbortSignal): Promise<PostsResult> {
-  const url = postsUrl(cfg, q, CARD_FIELDS);
-  if (url.length > MAX_URL_LENGTH) return fetchPostsViaIndex(cfg, q, signal);
-  const page = await dedupe(url, () => fetchPage<WpPost[]>(url, signal));
-  return {
-    posts: page.data.map(normalizePost),
-    terms: collectTerms(page.data),
-    total: page.total,
-    totalPages: page.totalPages,
-    fromIndex: false,
+export async function fetchPostIndex(cfg: SourceConfig, onProgress: (p: IndexProgress) => void, signal?: AbortSignal): Promise<void> {
+  const url = (page: number) =>
+    buildUrl(`${restRoot(cfg)}/${cfg.postsRestBase}`, {
+      per_page: PER_PAGE,
+      page,
+      orderby: 'date',
+      order: 'desc',
+      status: 'publish',
+      _fields: INDEX_FIELDS.join(','),
+    });
+  let loadedPages = 0;
+  const first = await fetchPage<WpPost[]>(url(1), signal);
+  const totalPages = first.totalPages ?? 1;
+  const report = (data: WpPost[]) => {
+    loadedPages += 1;
+    onProgress({ posts: data.map(normalizePost), loadedPages, totalPages, totalPosts: first.total });
   };
+  report(first.data);
+  await runQueue(
+    Array.from({ length: Math.max(0, totalPages - 1) }, (_, i) => async () => report((await fetchPage<WpPost[]>(url(i + 2), signal)).data)),
+    CONCURRENCY,
+  );
 }
 
 export async function fetchPost(cfg: SourceConfig, id: number, signal?: AbortSignal): Promise<{ post: PostRecord; terms: SourceTerm[] }> {
   const url = buildUrl(`${restRoot(cfg)}/${cfg.postsRestBase}/${id}`, { _fields: ARTICLE_FIELDS.join(','), _embed: EMBED });
   const page = await dedupe(url, () => fetchPage<WpPost>(url, signal));
-  return { post: normalizePost(page.data), terms: collectTerms([page.data]) };
+  const seen = new Map<string, SourceTerm>();
+  for (const t of embeddedTerms(page.data)) seen.set(t.key, t);
+  return { post: normalizePost(page.data), terms: [...seen.values()] };
 }
 
-/* ------------------------- Lightweight index fallback ------------------------- */
-// Used only when the assigned-term list is too large for a single query URL.
-// Fetches the complete lightweight post list once, caches it in memory, then
-// filters/paginates locally with exact attached-ID semantics.
+/* ---------------------------------- Media ---------------------------------- */
 
-let indexCache: { key: string; promise: Promise<WpPost[]> } | null = null;
-
-async function loadIndex(cfg: SourceConfig, signal?: AbortSignal): Promise<WpPost[]> {
-  const key = `${cfg.baseUrl}|${cfg.postsRestBase}`;
-  if (indexCache?.key === key) return indexCache.promise;
-  const promise = (async () => {
-    const url = (page: number) => postsUrl(cfg, { categoryIds: [], tagIds: [], page, perPage: PER_PAGE }, CARD_FIELDS);
-    const first = await fetchPage<WpPost[]>(url(1), signal);
-    const pages = first.totalPages ?? 1;
-    const rest = await runQueue(
-      Array.from({ length: Math.max(0, pages - 1) }, (_, i) => () => fetchPage<WpPost[]>(url(i + 2), signal).then((p) => p.data)),
-      CONCURRENCY,
-    );
-    return [...first.data, ...rest.flat()];
-  })();
-  indexCache = { key, promise };
-  promise.catch(() => {
-    if (indexCache?.promise === promise) indexCache = null;
-  });
-  return promise;
+interface WpMedia {
+  id: number;
+  source_url?: string;
+  media_details?: { sizes?: Record<string, { source_url: string }> };
 }
 
-async function fetchPostsViaIndex(cfg: SourceConfig, q: PostsQuery, signal?: AbortSignal): Promise<PostsResult> {
-  const all = await loadIndex(cfg, signal);
-  const cats = new Set(q.categoryIds);
-  const tags = new Set(q.tagIds);
-  const matched = all
-    .filter((p) => (p.categories ?? []).some((id) => cats.has(id)) || (p.tags ?? []).some((id) => tags.has(id)))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
-  const perPage = q.perPage ?? POSTS_PAGE_SIZE;
-  const start = (q.page - 1) * perPage;
-  const slice = matched.slice(start, start + perPage);
-  return {
-    posts: slice.map(normalizePost),
-    terms: collectTerms(slice),
-    total: matched.length,
-    totalPages: Math.max(1, Math.ceil(matched.length / perPage)),
-    fromIndex: true,
-  };
+const MEDIA_FIELDS = ['id', 'source_url', 'media_details.sizes.medium_large.source_url', 'media_details.sizes.large.source_url', 'media_details.sizes.medium.source_url'];
+const PREFERRED_SIZES = ['medium_large', 'large', 'medium'];
+
+/** Resolve featured images for a batch of media IDs in one request (used per displayed page of cards). */
+export async function fetchMediaBatch(cfg: SourceConfig, ids: number[], signal?: AbortSignal): Promise<Record<number, string | null>> {
+  const unique = [...new Set(ids.filter((id) => id > 0))].sort((a, b) => a - b);
+  if (unique.length === 0) return {};
+  const url = buildUrl(`${restRoot(cfg)}/media`, { include: unique.join(','), per_page: Math.min(PER_PAGE, unique.length), _fields: MEDIA_FIELDS.join(',') });
+  const page = await dedupe(url, () => fetchPage<WpMedia[]>(url, signal));
+  const out: Record<number, string | null> = {};
+  for (const id of unique) out[id] = null; // Missing/deleted media resolve to an explicit null so we don't retry forever.
+  for (const m of page.data) {
+    const sizes = m.media_details?.sizes;
+    out[m.id] = (sizes && PREFERRED_SIZES.map((s) => sizes[s]?.source_url).find(Boolean)) ?? m.source_url ?? null;
+  }
+  return out;
 }
 
 /* --------------------------------- Helpers --------------------------------- */
-
-export function buildQueryKey(destination: string, categoryIds: number[], tagIds: number[]): string {
-  const c = [...categoryIds].sort((a, b) => a - b).join(',');
-  const t = [...tagIds].sort((a, b) => a - b).join(',');
-  return `${destination}|c:${c}|t:${t}`;
-}
 
 export function describeError(e: unknown): string {
   if (e instanceof HttpError) return e.message;

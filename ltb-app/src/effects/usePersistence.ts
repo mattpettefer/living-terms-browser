@@ -1,6 +1,6 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { useStore } from '../state/provider';
-import { buildConfigDocument, type PersistenceAdapter } from '../services/persistence';
+import { buildConfigDocument, saveTempFilters, type PersistenceAdapter } from '../services/persistence';
 
 const DEBOUNCE_MS = 300;
 
@@ -9,6 +9,16 @@ export function usePersistence(adapter: PersistenceAdapter) {
   const { state, dispatch } = useStore();
   const { assignments, unresolvedAssignments, excludedTermKeys } = state;
   const unsaved = state.persistence.status === 'unsaved';
+
+  const { tempFilters, activeTempFilterId, tempFilterEnabled } = state;
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    saveTempFilters(state.source.baseUrl, { filters: tempFilters, activeId: activeTempFilterId, enabled: tempFilterEnabled });
+  }, [tempFilters, activeTempFilterId, tempFilterEnabled, state.source.baseUrl]);
 
   useEffect(() => {
     if (!unsaved) return;

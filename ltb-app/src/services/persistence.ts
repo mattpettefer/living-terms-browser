@@ -1,5 +1,6 @@
 import { DESTINATIONS, migrateDestinationId } from '../state/destinations';
-import type { Assignments, DestinationId, TermKey, UnresolvedAssignment } from '../state/types';
+import { newTempFilter, type TempFilterSnapshot } from '../state/reducer';
+import type { Assignments, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
 import { normalizeSourceUrl, parseTermKey } from './normalize';
 
 export const CONFIG_SCHEMA_VERSION = 1;
@@ -11,6 +12,8 @@ export interface ConfigDocument {
   assignments: Assignments;
   excludedTermKeys: TermKey[];
   unresolvedAssignments?: UnresolvedAssignment[];
+  /** Optional since the temp-filter feature; older documents simply omit it. */
+  tempFilters?: TempFilterSnapshot;
   modifiedAt: string;
 }
 
@@ -18,6 +21,21 @@ export interface ImportResult {
   assignments: Assignments;
   unresolved: UnresolvedAssignment[];
   warnings: string[];
+  /** Present only when the document carried temp filters. */
+  tempFilters: TempFilterSnapshot | null;
+}
+
+export const SHORTCODE_TAG = 'living_term_browser';
+
+/** Wrap a document as the enclosing shortcode so it can be pasted straight into a WordPress page. */
+export function wrapAsShortcode(json: string): string {
+  return `[${SHORTCODE_TAG}]\n${json}\n[/${SHORTCODE_TAG}]`;
+}
+
+/** Accept either bare JSON or JSON wrapped in the shortcode (as exported). */
+export function unwrapShortcode(text: string): string {
+  const m = new RegExp(`^\\s*\\[${SHORTCODE_TAG}[^\\]]*\\]([\\s\\S]*?)\\[\\/${SHORTCODE_TAG}\\]\\s*$`, 'i').exec(text);
+  return (m ? m[1]! : text).trim();
 }
 
 export function storageKey(sourceUrl: string): string {
@@ -29,8 +47,9 @@ export function buildConfigDocument(input: {
   assignments: Assignments;
   excludedTermKeys: TermKey[];
   unresolvedAssignments: UnresolvedAssignment[];
+  tempFilters?: TempFilterSnapshot;
 }): ConfigDocument {
-  return {
+  const doc: ConfigDocument = {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     sourceUrl: input.sourceUrl,
     destinations: [...DESTINATIONS],
@@ -39,6 +58,8 @@ export function buildConfigDocument(input: {
     unresolvedAssignments: input.unresolvedAssignments,
     modifiedAt: new Date().toISOString(),
   };
+  if (input.tempFilters) doc.tempFilters = input.tempFilters;
+  return doc;
 }
 
 export interface PersistenceAdapter {
@@ -56,6 +77,52 @@ export const localStorageAdapter: PersistenceAdapter = {
     window.localStorage.setItem(storageKey(doc.sourceUrl), JSON.stringify(doc));
   },
 };
+
+/* Temporary filter: stored separately so it survives reloads without becoming part of the mapping export. */
+export function tempFilterStorageKey(sourceUrl: string): string {
+  return `ltb:tempfilter:${normalizeSourceUrl(sourceUrl)}`;
+}
+
+function cleanKeys(value: unknown): TermKey[] {
+  return Array.isArray(value) ? value.filter((k): k is TermKey => typeof k === 'string' && parseTermKey(k) !== null) : [];
+}
+
+/** Accepts the current `{ filters, activeId }` shape and migrates the original single key array. */
+/** Lenient parse of a temp-filter snapshot from storage or an imported document. */
+export function parseTempFilters(parsed: unknown): TempFilterSnapshot | null {
+  if (Array.isArray(parsed)) {
+    const keys = cleanKeys(parsed);
+    return keys.length ? { filters: [newTempFilter('Filter 1', keys)], activeId: '' } : null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const doc = parsed as { filters?: unknown; activeId?: unknown; enabled?: unknown };
+  if (!Array.isArray(doc.filters)) return null;
+  const filters: TempFilter[] = doc.filters
+    .filter((f): f is Record<string, unknown> => !!f && typeof f === 'object')
+    .map((f, i) => ({
+      id: typeof f.id === 'string' && f.id ? f.id : `tf-import-${i}`,
+      name: typeof f.name === 'string' && f.name.trim() ? f.name : `Filter ${i + 1}`,
+      termKeys: cleanKeys(f.termKeys),
+    }));
+  return { filters, activeId: typeof doc.activeId === 'string' ? doc.activeId : '', enabled: typeof doc.enabled === 'boolean' ? doc.enabled : true };
+}
+
+export function loadTempFilters(sourceUrl: string): TempFilterSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(tempFilterStorageKey(sourceUrl));
+    return raw ? parseTempFilters(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveTempFilters(sourceUrl: string, snapshot: TempFilterSnapshot): void {
+  try {
+    window.localStorage.setItem(tempFilterStorageKey(sourceUrl), JSON.stringify(snapshot));
+  } catch {
+    /* best effort; temporary filters are expendable */
+  }
+}
 
 type RawEntry = { termKey: string; destination: string };
 
@@ -132,5 +199,7 @@ export function validateImport(
   for (const u of doc.unresolvedAssignments ?? []) {
     if (u && typeof u.termKey === 'string' && !(u.termKey in assignments)) unresolved.push(u);
   }
-  return { assignments, unresolved, warnings };
+  // Temp filters are optional extra information; a document without them leaves the current filters alone.
+  const tempFilters = doc.tempFilters !== undefined ? parseTempFilters(doc.tempFilters) : null;
+  return { assignments, unresolved, warnings, tempFilters };
 }

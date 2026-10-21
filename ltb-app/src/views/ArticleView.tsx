@@ -8,11 +8,11 @@ import { prepareContent } from '../services/content';
 import { parseTermKey } from '../services/normalize';
 import { destinationName } from '../state/destinations';
 import { useStore } from '../state/provider';
-import { getExcludedSet, getMatchedDestinations, getPostMatches, getTermWarning, joinNames } from '../state/selectors';
+import { getActiveTempFilter, getExcludedSet, getMatchedDestinations, getPostMatches, joinNames } from '../state/selectors';
 import type { SourceTerm, TermKey } from '../state/types';
 
 export function ArticleView() {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const postId = state.ui.selectedPostId;
   const { post, request, retry } = useArticle(postId);
   const excluded = getExcludedSet(state);
@@ -43,7 +43,9 @@ export function ArticleView() {
 
   const matches = getPostMatches(post, state.assignments, excluded);
   const matched = getMatchedDestinations(matches);
-  const overlap = matched.length > 1;
+  const activeFilter = getActiveTempFilter(state);
+  const filterSet = new Set(activeFilter.termKeys);
+  const inFilterCount = post.termKeys.filter((k) => filterSet.has(k)).length;
 
   const terms = post.termKeys.map((key) => ({ key, term: state.termsByKey[key] })).sort((a, b) => labelFor(a).localeCompare(labelFor(b), undefined, { sensitivity: 'base' }));
   const showFeatured = post.imageUrl && !(content?.containsFeaturedImage ?? false);
@@ -89,12 +91,10 @@ export function ArticleView() {
 
         <aside class="ltb-article-sidebar" aria-labelledby="ltb-terms-heading">
           <h2 id="ltb-terms-heading" class="ltb-h3">Terms</h2>
-          {!post.termsComplete && <p class="ltb-muted">Term list may be incomplete until the full article loads.</p>}
-          {overlap && (
-            <p class="ltb-sidebar-warning" role="note">
-              <span aria-hidden="true">! </span>Red terms contribute to a match in more than one destination category.
-            </p>
-          )}
+          <p class="ltb-muted ltb-sidebar-hint">
+            Click a term to require it in the temporary filter <strong>{activeFilter.name}</strong>
+            {inFilterCount > 0 && ` (${inFilterCount} of this article's terms required)`}. <a href="#/config/temp-filter">Manage filters</a>
+          </p>
           {terms.length === 0 ? (
             <p class="ltb-muted">This post has no categories or tags.</p>
           ) : (
@@ -103,16 +103,29 @@ export function ArticleView() {
                 const t: SourceTerm = term ?? placeholderTerm(key);
                 const isExcluded = excluded.has(key);
                 const owner = state.assignments[key];
-                const warning = getTermWarning(post, key, state.assignments, excluded);
-                const tooltip = warning
-                  ? warning.explanation
-                  : isExcluded
-                    ? 'Excluded term — never assigned and does not affect matching.'
-                    : owner
-                      ? `Assigned to ${destinationName(owner)}`
-                      : null;
-                const detail = warning && warning.otherTermKeys.length ? `Other matching terms: ${warning.otherTermKeys.map((k) => state.termsByKey[k]?.name ?? k).join(', ')}` : term ? null : 'Label not yet resolved';
-                return <TermButton key={key} term={t} warning={!!warning} tooltip={tooltip} detail={detail} />;
+                const inFilter = filterSet.has(key);
+                const base = isExcluded
+                  ? 'Excluded term — never assigned and does not affect matching.'
+                  : owner
+                    ? `Assigned to ${destinationName(owner)}`
+                    : null;
+                const filterNote = inFilter ? `Required by ${activeFilter.name} — click to remove.` : isExcluded ? null : `Click to require this term in ${activeFilter.name}.`;
+                const tooltip = [base, filterNote].filter(Boolean).join(' ') || null;
+                const detail = term ? null : 'Label not yet resolved';
+
+                return (
+                  <TermButton
+                    key={key}
+                    term={t}
+                    tone="filter"
+                    selected={inFilter}
+                    owner={inFilter ? null : (owner ?? null)}
+                    tooltip={tooltip}
+                    detail={detail}
+                    disabled={isExcluded}
+                    onClick={() => dispatch({ type: 'TOGGLE_TEMP_FILTER_TERM', termKey: key })}
+                  />
+                );
               })}
             </div>
           )}

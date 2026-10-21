@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { buildConfigDocument, validateImport } from '../services/persistence';
+import { buildConfigDocument, unwrapShortcode, validateImport, wrapAsShortcode } from '../services/persistence';
+import { markSeedApplied } from '../services/seed';
 import { useStore } from '../state/provider';
 
 type Mode = 'export' | 'import';
@@ -12,30 +13,43 @@ export function ImportExport() {
   const [replace, setReplace] = useState(true);
   const triggerRef = useRef<HTMLElement | null>(null);
 
-  const exportJson = () =>
-    JSON.stringify(
-      buildConfigDocument({
-        sourceUrl: state.source.baseUrl,
-        assignments: state.assignments,
-        excludedTermKeys: state.excludedTermKeys,
-        unresolvedAssignments: state.unresolvedAssignments,
-      }),
-      null,
-      2,
+  // Empty filters carry no information; omit them (and the field entirely if none remain).
+  const exportableTempFilters = () => {
+    const filters = state.tempFilters.filter((f) => f.termKeys.length > 0);
+    if (filters.length === 0) return undefined;
+    const activeId = filters.some((f) => f.id === state.activeTempFilterId) ? state.activeTempFilterId : filters[0]!.id;
+    return { filters, activeId, enabled: state.tempFilterEnabled };
+  };
+
+  const exportText = () =>
+    wrapAsShortcode(
+      JSON.stringify(
+        buildConfigDocument({
+          sourceUrl: state.source.baseUrl,
+          assignments: state.assignments,
+          excludedTermKeys: state.excludedTermKeys,
+          unresolvedAssignments: state.unresolvedAssignments,
+          tempFilters: exportableTempFilters(),
+        }),
+        null,
+        2,
+      ),
     );
 
-  const importText = (text: string): boolean => {
+  const importText = (text: string, replaceExisting = replace): boolean => {
     try {
-      if (!text.trim()) throw new Error('Nothing to import. Paste a configuration JSON document first.');
-      const parsed: unknown = JSON.parse(text);
+      const body = unwrapShortcode(text);
+      if (!body) throw new Error('Nothing to import. Paste a configuration JSON document first.');
+      const parsed: unknown = JSON.parse(body);
       const result = validateImport(parsed, {
         sourceUrl: state.source.baseUrl,
         excludedTermKeys: new Set(state.excludedTermKeys),
         knownTermKeys: state.termsInventory.complete ? new Set(Object.keys(state.termsByKey) as never[]) : null,
       });
-      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace });
+      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, tempFilters: result.tempFilters });
       const n = Object.keys(result.assignments).length;
       const parts = [`Imported ${n} assignment${n === 1 ? '' : 's'}.`];
+      if (result.tempFilters) parts.push(`${result.tempFilters.filters.length} temporary filter${result.tempFilters.filters.length === 1 ? '' : 's'} restored.`);
       if (result.unresolved.length) parts.push(`${result.unresolved.length} entr${result.unresolved.length === 1 ? 'y' : 'ies'} need review.`);
       parts.push(...result.warnings);
       setMessage({ kind: result.unresolved.length || result.warnings.length ? 'warn' : 'ok', text: parts.join(' ') });
@@ -75,6 +89,21 @@ export function ImportExport() {
         <button type="button" class="ltb-btn" onClick={(e) => open('import', e)}>
           Import…
         </button>
+        {state.pageSeed && (
+          <button
+            type="button"
+            class="ltb-btn"
+            title="Replace the current mapping with the configuration embedded in this page's shortcode"
+            onClick={() => {
+              if (window.confirm('Replace the current mapping with the configuration embedded in this page?')) {
+                const ok = importText(state.pageSeed!, true);
+                if (ok) markSeedApplied(state.source.baseUrl, state.pageSeed!);
+              }
+            }}
+          >
+            Re-import page configuration
+          </button>
+        )}
       </div>
       {message && (
         <p class={`ltb-ie-message is-${message.kind}`} role="status">
@@ -94,7 +123,7 @@ export function ImportExport() {
         </details>
       )}
 
-      {mode === 'export' && <ExportDialog json={exportJson()} onClose={close} />}
+      {mode === 'export' && <ExportDialog json={exportText()} onClose={close} />}
       {mode === 'import' && (
         <ImportDialog
           replace={replace}
@@ -148,10 +177,10 @@ function ExportDialog({ json, onClose }: { json: string; onClose: () => void }) 
   };
 
   const download = () => {
-    const blob = new Blob([json], { type: 'application/json' });
+    const blob = new Blob([json], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `living-term-mapping-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `living-term-mapping-${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -162,7 +191,7 @@ function ExportDialog({ json, onClose }: { json: string; onClose: () => void }) 
         <h2 id="ltb-export-title" class="ltb-dialog-title">
           Export configuration
         </h2>
-        <p class="ltb-dialog-text">Copy this JSON to back up or share your term mapping. Paste it into Import on another browser to restore it.</p>
+        <p class="ltb-dialog-text">Ready to paste into a WordPress page as the shortcode, or into Import on another browser. Includes assignments and temporary filters.</p>
         <textarea ref={textRef} class="ltb-textarea" readOnly rows={14} value={json} aria-label="Configuration JSON" onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
         {status && (
           <p class="ltb-muted ltb-dialog-status" role="status">
@@ -228,7 +257,7 @@ function ImportDialog({
           Import configuration
         </h2>
         <p class="ltb-dialog-text">
-          Paste an exported configuration JSON document below. Entries with conflicting or unknown destinations are kept for review rather than applied.
+          Paste an exported configuration below (with or without the shortcode wrapper). Entries with conflicting or unknown destinations are kept for review rather than applied.
         </p>
         <textarea
           ref={textRef}
@@ -250,7 +279,7 @@ function ImportDialog({
           <input
             ref={fileRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/json,.json,.txt"
             hidden
             onChange={(e) => {
               const f = (e.currentTarget as HTMLInputElement).files?.[0];

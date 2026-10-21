@@ -7,19 +7,24 @@ import { navigate } from '../effects/useHashRouter';
 import { useTermInventory } from '../effects/useTermInventory';
 import { destinationName } from '../state/destinations';
 import { useStore } from '../state/provider';
-import { getAssignmentCounts, getDuplicateNameCounts, getVisibleTerms, sortSelectedFirst } from '../state/selectors';
+import { getActiveTempFilter, getAssignmentCounts, getDuplicateNameCounts, getVisibleTerms, sortSelectedFirst } from '../state/selectors';
+import { TempFilterSwitcher } from '../components/TempFilterSwitcher';
 import type { ConfigTab, DestinationId, SourceTerm } from '../state/types';
 import { ImportExport } from './ImportExport';
 
 const CHUNK = 200;
 const UNASSIGNED = 'unassigned' as const;
+const TEMP = 'temp-filter' as const;
 
 export function Config() {
   const { state, dispatch } = useStore();
   const { retry } = useTermInventory();
   const active = state.ui.activeConfigCategory;
   const isUnassignedTab = active === UNASSIGNED;
-  const activeDestination: DestinationId | null = active === UNASSIGNED ? null : active;
+  const isTempTab = active === TEMP;
+  const activeDestination: DestinationId | null = active === UNASSIGNED || active === TEMP ? null : active;
+  const activeFilter = getActiveTempFilter(state);
+  const tempSet = useMemo(() => new Set(activeFilter.termKeys), [activeFilter.termKeys]);
   const search = state.ui.termSearch;
   const categoriesOnly = state.ui.categoriesOnly;
   const inventory = state.termsInventory;
@@ -32,8 +37,10 @@ export function Config() {
   );
   const visible = useMemo(() => {
     if (isUnassignedTab) return alphabetical.filter((t) => !state.assignments[t.key]);
-    return termSort === 'selected-first' ? sortSelectedFirst(alphabetical, state.assignments, active) : alphabetical;
-  }, [alphabetical, termSort, state.assignments, active, isUnassignedTab]);
+    if (termSort !== 'selected-first') return alphabetical;
+    if (isTempTab) return sortSelectedFirst(alphabetical, (t) => tempSet.has(t.key));
+    return sortSelectedFirst(alphabetical, (t) => state.assignments[t.key] === activeDestination);
+  }, [alphabetical, termSort, state.assignments, activeDestination, isUnassignedTab, isTempTab, tempSet]);
   const unassignedCount = useMemo(
     () => getVisibleTerms(state, '', false).filter((t) => !state.assignments[t.key]).length,
     [state.termOrder, state.termsByKey, state.excludedTermKeys, state.assignments],
@@ -55,6 +62,10 @@ export function Config() {
   const [assigning, setAssigning] = useState<SourceTerm | null>(null);
   const onTermClick = (term: SourceTerm, ev?: Event) => {
     lastTrigger.current = (ev?.currentTarget as HTMLElement) ?? (document.activeElement as HTMLElement);
+    if (isTempTab) {
+      dispatch({ type: 'TOGGLE_TEMP_FILTER_TERM', termKey: term.key });
+      return;
+    }
     if (!activeDestination) {
       setAssigning(term);
       return;
@@ -75,7 +86,7 @@ export function Config() {
     restoreFocus();
   };
 
-  const tabIds: ConfigTab[] = [...state.destinationCategories.map((d) => d.id), UNASSIGNED];
+  const tabIds: ConfigTab[] = [...state.destinationCategories.map((d) => d.id), UNASSIGNED, TEMP];
   const onTabKey = (e: KeyboardEvent, index: number) => {
     let next: number | null = null;
     if (e.key === 'ArrowRight') next = (index + 1) % tabIds.length;
@@ -99,8 +110,8 @@ export function Config() {
       aria-selected={active === id}
       aria-controls="ltb-config-panel"
       tabIndex={active === id ? 0 : -1}
-      class={`ltb-tab${active === id ? ' is-active' : ''}${id === UNASSIGNED ? ' ltb-tab-unassigned' : ''}`}
-      data-destination={id === UNASSIGNED ? undefined : id}
+      class={`ltb-tab${active === id ? ' is-active' : ''}${id === UNASSIGNED ? ' ltb-tab-unassigned' : ''}${id === TEMP ? ' ltb-tab-temp' : ''}`}
+      data-destination={id === UNASSIGNED || id === TEMP ? undefined : id}
       onClick={() => navigate({ view: 'config', category: id })}
       onKeyDown={(e) => onTabKey(e, index)}
     >
@@ -114,26 +125,35 @@ export function Config() {
     <section class="ltb-config">
       <div class="ltb-tabs" role="tablist" aria-label="Destination categories">
         {state.destinationCategories.map((d, i) => tabButton(d.id, d.name, counts[d.id], i))}
-        {tabButton(UNASSIGNED, 'Unassigned', unassignedCount, tabIds.length - 1)}
+        {tabButton(UNASSIGNED, 'Unassigned', unassignedCount, tabIds.length - 2)}
+        {tabButton(TEMP, state.tempFilters.length > 1 ? 'Temp Filters' : 'Temp Filter', activeFilter.termKeys.length, tabIds.length - 1)}
       </div>
 
       <div
         id="ltb-config-panel"
         role="tabpanel"
         aria-labelledby={`ltb-tab-${active}`}
-        class="ltb-config-panel"
-        data-destination={isUnassignedTab ? undefined : active}
+        class={`ltb-config-panel${isTempTab ? ' is-temp' : ''}`}
+        data-destination={activeDestination ?? undefined}
       >
         <header class="ltb-config-header">
           <h2 class="ltb-h2 ltb-config-title">
             <span class="ltb-swatch ltb-swatch-lg" aria-hidden="true" />
-            {activeDestination ? destinationName(activeDestination) : 'Unassigned'}
+            {activeDestination ? destinationName(activeDestination) : isTempTab ? `Temporary filter: ${activeFilter.name}${state.tempFilterEnabled ? '' : ' (not applied)'}` : 'Unassigned'}
+            {isTempTab && activeFilter.termKeys.length > 0 && (
+              <button type="button" class="ltb-btn ltb-btn-small ltb-config-title-action" onClick={() => dispatch({ type: 'CLEAR_TEMP_FILTER' })}>
+                Clear filter
+              </button>
+            )}
           </h2>
-          <p class="ltb-muted">
-            {isUnassignedTab
-              ? 'Terms not yet assigned to any destination category. Click a term to choose where it belongs.'
-              : 'Click a term to assign it here. Click a highlighted term to unassign it. Terms colored for another category ask for confirmation before moving.'}
-          </p>
+          {isTempTab && <TempFilterSwitcher manage />}
+          {!isTempTab && (
+            <p class="ltb-muted">
+              {isUnassignedTab
+                ? 'Terms not yet assigned to any destination category. Click a term to choose where it belongs.'
+                : 'Click a term to assign it here. Click a highlighted term to unassign it. Terms colored for another category ask for confirmation before moving.'}
+            </p>
+          )}
         </header>
 
         <div class="ltb-config-toolbar">
@@ -169,6 +189,7 @@ export function Config() {
           <span class="ltb-muted" role="status" aria-live="polite">
             {inventory.status === 'loading' && `Loading terms (${progress})… `}
             {visible.length.toLocaleString()} {isUnassignedTab ? 'unassigned ' : ''}term{visible.length === 1 ? '' : 's'}
+            {isTempTab && ` · ${activeFilter.termKeys.length} in ${activeFilter.name}`}
             {search && ' match'}
             {categoriesOnly && ' (source categories only)'}
             {!inventory.complete && inventory.status !== 'error' && ' so far'}
@@ -183,13 +204,15 @@ export function Config() {
           {visible.slice(0, limit).map((t) => {
             const owner = state.assignments[t.key];
             const dup = (duplicates.get(t.name.toLowerCase()) ?? 0) > 1;
+            const inTemp = tempSet.has(t.key);
             const tooltip = owner && owner !== active ? `Assigned to ${destinationName(owner)}` : null;
             return (
               <TermButton
                 key={t.key}
                 term={t}
-                selected={owner === active}
-                owner={owner ?? null}
+                selected={isTempTab ? inTemp : owner === active}
+                owner={isTempTab && inTemp ? null : (owner ?? null)}
+                tone={isTempTab ? 'filter' : 'destination'}
                 tooltip={tooltip}
                 detail={dup ? `Source ID ${t.id} (${t.taxonomy === 'category' ? 'category' : 'tag'})` : null}
                 onClick={(term) => onTermClick(term)}

@@ -18,8 +18,14 @@ export interface Destination {
 }
 
 export type TermSort = 'alpha' | 'selected-first';
-/** Config tabs: one per destination plus a view of terms not yet assigned anywhere. */
-export type ConfigTab = DestinationId | 'unassigned';
+
+export interface TempFilter {
+  id: string;
+  name: string;
+  termKeys: TermKey[];
+}
+/** Config tabs: one per destination, a view of unassigned terms, and the temporary secondary filter. */
+export type ConfigTab = DestinationId | 'unassigned' | 'temp-filter';
 
 export interface SourceTerm {
   key: TermKey;
@@ -51,13 +57,13 @@ export interface RequestState {
   requestId: string | null;
 }
 
-export interface QueryEntry extends RequestState {
-  postIds: number[];
-  totalPosts: number | null;
+/** Loading state of the complete lightweight post index that backs every Overview list. */
+export interface PostIndexState extends RequestState {
+  complete: boolean;
+  loadedPages: number;
   totalPages: number | null;
-  page: number;
+  totalPosts: number | null;
   fetchedAt: number | null;
-  mappingRevision: number;
 }
 
 export type Assignments = Partial<Record<TermKey, DestinationId>>;
@@ -76,6 +82,8 @@ export interface UnresolvedAssignment {
 
 export interface AppState {
   source: { baseUrl: string; postsRestBase: string };
+  /** Raw configuration JSON embedded by the shortcode, if any, so it can be re-imported on demand. */
+  pageSeed: string | null;
   destinationCategories: Destination[];
   termsByKey: Partial<Record<TermKey, SourceTerm>>;
   termOrder: TermKey[];
@@ -84,14 +92,29 @@ export interface AppState {
 
   assignments: Assignments;
   mappingRevision: number;
+  /**
+   * Temporary secondary filters. The active one, when non-empty, narrows every
+   * Overview list to posts that also carry at least one of its terms.
+   * Independent of assignments and not part of the exported mapping
+   * configuration. There is always at least one filter.
+   */
+  tempFilters: TempFilter[];
+  activeTempFilterId: string;
+  /** False = "No Filter": the Overview ignores temp filters without discarding them. */
+  tempFilterEnabled: boolean;
   unresolvedAssignments: UnresolvedAssignment[];
   postsById: Record<number, PostRecord>;
-  queriesByKey: Record<string, QueryEntry>;
+  /** Newest-first order of every indexed post ID. */
+  postOrder: number[];
+  postIndex: PostIndexState;
+  /** Featured-image URL by media ID; null means the media item is missing on the source. */
+  mediaById: Record<number, string | null>;
   articleRequestsById: Record<number, RequestState>;
 
   ui: {
     view: 'overview' | 'config' | 'article';
     overviewCategory: DestinationId | 'all';
+    /** Number of cards currently revealed (local paging over the index). */
     overviewPage: number;
     overviewScrollY: number;
     activeConfigCategory: ConfigTab;
