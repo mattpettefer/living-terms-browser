@@ -288,7 +288,7 @@
 .ltb-tab.is-active { color: var(--dest, var(--ltb-accent)); border-bottom-color: var(--dest, var(--ltb-accent)); }
 .ltb-tab-count { font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: var(--ltb-surface); color: var(--ltb-text); }
 .ltb-tab.is-active .ltb-tab-count { background: var(--dest, var(--ltb-accent)); color: #fff; }
-.ltb-tab-unassigned { margin-left: auto; --dest: var(--ltb-muted); }
+.ltb-tab-unassigned { --dest: var(--ltb-muted); }
 .ltb-tab-unassigned .ltb-swatch { background: transparent; border: 2px dashed var(--ltb-muted); }
 
 /* Destination chooser (Unassigned tab) */
