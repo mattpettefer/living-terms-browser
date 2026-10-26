@@ -1,5 +1,5 @@
 import { destinationName } from './destinations';
-import type { AppState, Assignments, DestinationId, FilterOperator, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
+import type { AppState, Assignments, DestinationId, DestinationExclusions, FilterOperator, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
 
 export function getAssignedTerms(state: AppState, destinationId: DestinationId): SourceTerm[] {
   const out: SourceTerm[] = [];
@@ -16,13 +16,16 @@ export function getAssignedTermKeys(assignments: Assignments, destinationId: Des
   return (Object.entries(assignments) as [TermKey, DestinationId][]).filter(([, d]) => d === destinationId).map(([k]) => k);
 }
 
-export function getPostMatches(post: PostRecord, assignments: Assignments, excluded: ReadonlySet<TermKey>): PostMatches {
+export function getPostMatches(post: PostRecord, assignments: Assignments, excluded: ReadonlySet<TermKey>, destinationExclusions: DestinationExclusions = {}): PostMatches {
   const matches: PostMatches = {};
   for (const key of new Set(post.termKeys)) {
     if (excluded.has(key)) continue;
     const destination = assignments[key];
     if (!destination) continue;
     (matches[destination] ??= []).push(key);
+  }
+  for (const destination of Object.keys(matches) as DestinationId[]) {
+    if (destinationExclusions[destination]?.some((key) => post.termKeys.includes(key))) delete matches[destination];
   }
   return matches;
 }
@@ -70,11 +73,12 @@ export function sortSelectedFirst(terms: SourceTerm[], isSelected: (term: Source
  * Client-side secondary filter: OR matches any selected term; AND requires
  * every selected term. An empty filter leaves the primary results unchanged.
  */
-export function applyTempFilter(posts: PostRecord[], tempFilterTermKeys: readonly TermKey[], operator: FilterOperator = 'OR'): PostRecord[] {
-  if (tempFilterTermKeys.length === 0) return posts;
+export function applyTempFilter(posts: PostRecord[], tempFilterTermKeys: readonly TermKey[], operator: FilterOperator = 'OR', notTermKeys: readonly TermKey[] = []): PostRecord[] {
+  if (tempFilterTermKeys.length === 0 && notTermKeys.length === 0) return posts;
   return posts.filter((p) => {
     const have = new Set(p.termKeys);
-    return operator === 'AND' ? tempFilterTermKeys.every((k) => have.has(k)) : tempFilterTermKeys.some((k) => have.has(k));
+    if (notTermKeys.some((key) => have.has(key))) return false;
+    return tempFilterTermKeys.length === 0 || (operator === 'AND' ? tempFilterTermKeys.every((k) => have.has(k)) : tempFilterTermKeys.some((k) => have.has(k)));
   });
 }
 
@@ -87,7 +91,7 @@ export function getTempFilterTerms(state: AppState, filter: TempFilter = getActi
 }
 
 export function getTempFilterTermCount(state: AppState): number {
-  return state.tempFilters.reduce((n, f) => n + f.termKeys.length, 0);
+  return state.tempFilters.reduce((n, f) => n + f.termKeys.length + (f.notTermKeys?.length ?? 0), 0);
 }
 
 export interface OverviewResults {
@@ -113,18 +117,18 @@ export function getOverviewResults(state: AppState, category: DestinationId | 'a
   for (const id of state.postOrder) {
     const p = state.postsById[id];
     if (!p) continue;
-    if (category === 'all' || p.termKeys.some((k) => !excluded.has(k) && state.assignments[k] === category)) primary.push(p);
+    if (category === 'all' || (p.termKeys.some((k) => !excluded.has(k) && state.assignments[k] === category) && !(state.destinationExclusions[category] ?? []).some((key) => p.termKeys.includes(key)))) primary.push(p);
   }
   const activeFilter = getActiveTempFilter(state);
   const tempKeys = state.tempFilterEnabled ? activeFilter.termKeys : [];
-  return { matching: applyTempFilter(primary, tempKeys, activeFilter.operator), primaryCount: primary.length, emptyAssignment };
+  return { matching: applyTempFilter(primary, tempKeys, activeFilter.operator, state.tempFilterEnabled ? activeFilter.notTermKeys : []), primaryCount: primary.length, emptyAssignment };
 }
 
 /** Explicit choices are independent of source-term assignments. */
 export function getSelectionResults(state: AppState, category: DestinationId | 'all'): OverviewResults {
   const primary = state.postOrder.map((id) => state.postsById[id]).filter((p): p is PostRecord => !!p && (category === 'all' || state.postSelections[p.id] === category));
   const filter = getActiveTempFilter(state);
-  return { matching: applyTempFilter(primary, state.tempFilterEnabled ? filter.termKeys : [], filter.operator), primaryCount: primary.length, emptyAssignment: false };
+  return { matching: applyTempFilter(primary, state.tempFilterEnabled ? filter.termKeys : [], filter.operator, state.tempFilterEnabled ? filter.notTermKeys : []), primaryCount: primary.length, emptyAssignment: false };
 }
 
 export function getSelectionCounts(state: AppState): Record<DestinationId, number> {

@@ -5,6 +5,7 @@ import type {
   Assignments,
   ConfigTab,
   DestinationId,
+  DestinationExclusions,
   FilterOperator,
   PostRecord,
   PostSelections,
@@ -20,7 +21,7 @@ export type Action =
   | { type: 'NAVIGATE'; view: 'config'; category?: ConfigTab }
   | { type: 'NAVIGATE'; view: 'article'; postId: number }
   | { type: 'DESELECT_ALL'; destination: DestinationId; view: 'overview' | 'selections' }
-  | { type: 'SELECT_ALL_OVERVIEW'; destination: DestinationId }
+  | { type: 'SELECT_ALL_OVERVIEW'; destination: DestinationId; replaceExisting?: boolean }
   | { type: 'SELECT_POST_DESTINATION'; postId: number; destination: DestinationId | null }
   | { type: 'SET_SELECTIONS_CATEGORY'; category: DestinationId | 'all' }
   | { type: 'SET_SELECTIONS_SCROLL'; scrollY: number }
@@ -46,12 +47,14 @@ export type Action =
   | { type: 'ARTICLE_START'; postId: number; requestId: string }
   | { type: 'ARTICLE_SUCCESS'; postId: number; requestId: string; post: PostRecord }
   | { type: 'ARTICLE_ERROR'; postId: number; requestId: string; error: string }
+  | { type: 'TOGGLE_DESTINATION_NOT_TERM'; destination: DestinationId; termKey: TermKey }
   | { type: 'ASSIGN_TERM'; termKey: TermKey; destination: DestinationId }
   | { type: 'UNASSIGN_TERM'; termKey: TermKey }
   | { type: 'OPEN_MOVE'; termKey: TermKey; fromCategory: DestinationId; toCategory: DestinationId }
   | { type: 'CANCEL_MOVE' }
   | { type: 'CONFIRM_MOVE' }
-  | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; postSelections?: PostSelections | null; tempFilters?: TempFilterSnapshot | null }
+  | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null; tempFilters?: TempFilterSnapshot | null }
+  | { type: 'TOGGLE_TEMP_FILTER_NOT_TERM'; termKey: TermKey; filterId?: string }
   | { type: 'TOGGLE_TEMP_FILTER_TERM'; termKey: TermKey; filterId?: string }
   | { type: 'SET_TEMP_FILTER_OPERATOR'; filterId: string; operator: FilterOperator }
   | { type: 'CLEAR_TEMP_FILTER'; filterId?: string }
@@ -69,13 +72,13 @@ export interface TempFilterSnapshot {
 }
 
 export function newTempFilter(name: string, termKeys: TermKey[] = []): TempFilter {
-  return { id: `tf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name, termKeys, operator: 'OR' };
+  return { id: `tf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name, termKeys, notTermKeys: [], operator: 'OR' };
 }
 
 /** Guarantee at least one filter and a valid active ID. */
 export function normalizeTempFilters(snapshot?: Partial<TempFilterSnapshot> | null): TempFilterSnapshot {
   const filters: TempFilter[] = snapshot?.filters?.length
-    ? snapshot.filters.map((f) => ({ ...f, operator: f.operator === 'AND' ? 'AND' : 'OR' }))
+    ? snapshot.filters.map((f) => ({ ...f, termKeys: f.termKeys.filter((key) => !(f.notTermKeys ?? []).includes(key)), notTermKeys: f.notTermKeys ?? [], operator: f.operator === 'AND' ? 'AND' : 'OR' }))
     : [newTempFilter('Filter 1')];
   const activeId = filters.some((f) => f.id === snapshot?.activeId) ? snapshot!.activeId! : filters[0]!.id;
   return { filters, activeId, enabled: snapshot?.enabled ?? true };
@@ -83,7 +86,7 @@ export function normalizeTempFilters(snapshot?: Partial<TempFilterSnapshot> | nu
 
 export function createInitialState(
   source: AppState['source'],
-  saved?: { assignments: Assignments; unresolved: UnresolvedAssignment[]; postSelections?: PostSelections | null },
+  saved?: { assignments: Assignments; unresolved: UnresolvedAssignment[]; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null },
   tempFilters?: Partial<TempFilterSnapshot> | null,
   pageSeed: string | null = null,
 ): AppState {
@@ -97,6 +100,7 @@ export function createInitialState(
     excludedTermKeys: [],
     termsInventory: { status: 'idle', error: null, requestId: null, complete: false, fetchedAt: null, loadedPages: 0, totalPages: null },
     assignments: saved?.assignments ?? {},
+    destinationExclusions: saved?.destinationExclusions ?? {},
     postSelections: saved?.postSelections ?? {},
     mappingRevision: 0,
     tempFilters: tf.filters,
@@ -197,6 +201,7 @@ function commitAssignments(state: AppState, assignments: Assignments): AppState 
   return {
     ...state,
     assignments,
+    destinationExclusions: Object.fromEntries(Object.entries(state.destinationExclusions).map(([destination, keys]) => [destination, keys.filter((key) => assignments[key] !== destination)])),
     mappingRevision: state.mappingRevision + 1,
     ui: { ...state.ui, pendingTermMove: null },
     persistence: { ...state.persistence, status: 'unsaved' },
@@ -235,7 +240,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const postSelections = { ...state.postSelections };
       let changed = false;
       for (const post of matching) {
-        if (postSelections[post.id] === action.destination) continue;
+        if (postSelections[post.id] === action.destination || (!action.replaceExisting && postSelections[post.id] != null)) continue;
         postSelections[post.id] = action.destination;
         changed = true;
       }
@@ -340,6 +345,17 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
 
+    case 'TOGGLE_DESTINATION_NOT_TERM': {
+      if (state.excludedTermKeys.includes(action.termKey)) return state;
+      const keys = state.destinationExclusions[action.destination] ?? [];
+      const removing = keys.includes(action.termKey);
+      const assignments = { ...state.assignments };
+      if (!removing && assignments[action.termKey] === action.destination) delete assignments[action.termKey];
+      return {
+        ...commitAssignments(state, assignments),
+        destinationExclusions: { ...state.destinationExclusions, [action.destination]: removing ? keys.filter((key) => key !== action.termKey) : [...keys, action.termKey] },
+      };
+    }
     case 'ASSIGN_TERM': {
       if (state.excludedTermKeys.includes(action.termKey)) return state;
       if (state.assignments[action.termKey] === action.destination) return state;
@@ -372,6 +388,16 @@ export function reducer(state: AppState, action: Action): AppState {
         if (!state.excludedTermKeys.includes(k)) assignments[k] = v;
       }
       const next = { ...commitAssignments(state, assignments), unresolvedAssignments: action.unresolved };
+      if (action.destinationExclusions != null) {
+        next.destinationExclusions = action.replace ? { ...action.destinationExclusions } : { ...state.destinationExclusions };
+        if (!action.replace) for (const [destination, keys] of Object.entries(action.destinationExclusions) as [DestinationId, TermKey[]][]) {
+          next.destinationExclusions[destination] = [...new Set([...(next.destinationExclusions[destination] ?? []), ...keys])];
+        }
+      }
+      // Imported NOT rules take precedence over positive rules for the same destination.
+      for (const [destination, keys] of Object.entries(next.destinationExclusions)) for (const key of keys) {
+        if (next.assignments[key] === destination) delete next.assignments[key];
+      }
       if (action.postSelections != null) next.postSelections = action.replace ? { ...action.postSelections } : { ...state.postSelections, ...action.postSelections };
       if (action.tempFilters) {
         const tf = normalizeTempFilters(action.tempFilters);
@@ -385,7 +411,20 @@ export function reducer(state: AppState, action: Action): AppState {
       const id = action.filterId ?? state.activeTempFilterId;
       const next = updateTempFilter(state, id, (f) => ({
         ...f,
+        notTermKeys: (f.notTermKeys ?? []).filter((key) => key !== action.termKey),
         termKeys: f.termKeys.includes(action.termKey) ? f.termKeys.filter((k) => k !== action.termKey) : [...f.termKeys, action.termKey],
+      }));
+      return next === state || id !== state.activeTempFilterId || state.tempFilterEnabled ? next : { ...next, tempFilterEnabled: true };
+    }
+    case 'TOGGLE_TEMP_FILTER_NOT_TERM': {
+      if (state.excludedTermKeys.includes(action.termKey)) return state;
+      const id = action.filterId ?? state.activeTempFilterId;
+      const next = updateTempFilter(state, id, (f) => ({
+        ...f,
+        termKeys: f.termKeys.filter((key) => key !== action.termKey),
+        notTermKeys: (f.notTermKeys ?? []).includes(action.termKey)
+          ? (f.notTermKeys ?? []).filter((key) => key !== action.termKey)
+          : [...(f.notTermKeys ?? []), action.termKey],
       }));
       return next === state || id !== state.activeTempFilterId || state.tempFilterEnabled ? next : { ...next, tempFilterEnabled: true };
     }
@@ -396,7 +435,7 @@ export function reducer(state: AppState, action: Action): AppState {
         : { ...next, ui: { ...next.ui, overviewPage: 1, overviewScrollY: 0 } };
     }
     case 'CLEAR_TEMP_FILTER':
-      return updateTempFilter(state, action.filterId ?? state.activeTempFilterId, (f) => (f.termKeys.length ? { ...f, termKeys: [] } : f));
+      return updateTempFilter(state, action.filterId ?? state.activeTempFilterId, (f) => (f.termKeys.length || f.notTermKeys?.length ? { ...f, termKeys: [], notTermKeys: [] } : f));
     case 'ADD_TEMP_FILTER': {
       const name = action.name?.trim() || nextFilterName(state.tempFilters);
       const filter = newTempFilter(name);

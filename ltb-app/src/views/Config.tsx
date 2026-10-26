@@ -8,6 +8,7 @@ import { useTermInventory } from '../effects/useTermInventory';
 import { destinationName } from '../state/destinations';
 import { useStore } from '../state/provider';
 import { getActiveTempFilter, getAssignmentCounts, getDuplicateNameCounts, getVisibleTerms, sortSelectedFirst } from '../state/selectors';
+import { TempFilterLines } from '../components/TempFilterLines';
 import { TempFilterSwitcher } from '../components/TempFilterSwitcher';
 import type { ConfigTab, DestinationId, SourceTerm } from '../state/types';
 import { ImportExport } from './ImportExport';
@@ -24,7 +25,9 @@ export function Config() {
   const isTempTab = active === TEMP;
   const activeDestination: DestinationId | null = active === UNASSIGNED || active === TEMP ? null : active;
   const activeFilter = getActiveTempFilter(state);
-  const tempSet = useMemo(() => new Set(activeFilter.termKeys), [activeFilter.termKeys]);
+  const [filterLine, setFilterLine] = useState<'match' | 'not'>('match');
+  const tempSet = useMemo(() => new Set(filterLine === 'not' ? activeFilter.notTermKeys ?? [] : activeFilter.termKeys), [activeFilter.termKeys, activeFilter.notTermKeys, filterLine]);
+  const destinationNotSet = useMemo(() => new Set(activeDestination ? state.destinationExclusions[activeDestination] ?? [] : []), [state.destinationExclusions, activeDestination]);
   const search = state.ui.termSearch;
   const categoriesOnly = state.ui.categoriesOnly;
   const inventory = state.termsInventory;
@@ -39,8 +42,8 @@ export function Config() {
     if (isUnassignedTab) return alphabetical.filter((t) => !state.assignments[t.key]);
     if (termSort !== 'selected-first') return alphabetical;
     if (isTempTab) return sortSelectedFirst(alphabetical, (t) => tempSet.has(t.key));
-    return sortSelectedFirst(alphabetical, (t) => state.assignments[t.key] === activeDestination);
-  }, [alphabetical, termSort, state.assignments, activeDestination, isUnassignedTab, isTempTab, tempSet]);
+    return sortSelectedFirst(alphabetical, (t) => filterLine === 'not' ? destinationNotSet.has(t.key) : state.assignments[t.key] === activeDestination);
+  }, [alphabetical, termSort, state.assignments, activeDestination, isUnassignedTab, isTempTab, tempSet, filterLine, destinationNotSet]);
   const unassignedCount = useMemo(
     () => getVisibleTerms(state, '', false).filter((t) => !state.assignments[t.key]).length,
     [state.termOrder, state.termsByKey, state.excludedTermKeys, state.assignments],
@@ -49,7 +52,7 @@ export function Config() {
   // Incremental rendering: grow the rendered window as the user scrolls near the end.
   const [limit, setLimit] = useState(CHUNK);
   const sentinel = useRef<HTMLDivElement>(null);
-  useEffect(() => setLimit(CHUNK), [search, active, categoriesOnly, termSort]);
+  useEffect(() => setLimit(CHUNK), [search, active, categoriesOnly, termSort, filterLine, activeFilter.id]);
   useEffect(() => {
     const el = sentinel.current;
     if (!el || limit >= visible.length) return;
@@ -63,11 +66,15 @@ export function Config() {
   const onTermClick = (term: SourceTerm, ev?: Event) => {
     lastTrigger.current = (ev?.currentTarget as HTMLElement) ?? (document.activeElement as HTMLElement);
     if (isTempTab) {
-      dispatch({ type: 'TOGGLE_TEMP_FILTER_TERM', termKey: term.key });
+      dispatch({ type: filterLine === 'not' ? 'TOGGLE_TEMP_FILTER_NOT_TERM' : 'TOGGLE_TEMP_FILTER_TERM', termKey: term.key });
       return;
     }
     if (!activeDestination) {
       setAssigning(term);
+      return;
+    }
+    if (filterLine === 'not') {
+      dispatch({ type: 'TOGGLE_DESTINATION_NOT_TERM', destination: activeDestination, termKey: term.key });
       return;
     }
     const current = state.assignments[term.key];
@@ -117,7 +124,7 @@ export function Config() {
     >
       <span class="ltb-swatch" aria-hidden="true" />
       {label}
-      <span class="ltb-tab-count">{count}</span>
+      <span class="ltb-tab-count">{count.toLocaleString()} term{count === 1 ? '' : 's'}</span>
     </button>
   );
 
@@ -126,7 +133,7 @@ export function Config() {
       <div class="ltb-tabs" role="tablist" aria-label="Destination categories">
         {state.destinationCategories.map((d, i) => tabButton(d.id, d.name, counts[d.id], i))}
         {tabButton(UNASSIGNED, 'Unassigned', unassignedCount, tabIds.length - 2)}
-        {tabButton(TEMP, state.tempFilters.length > 1 ? 'Temp Filters' : 'Temp Filter', activeFilter.termKeys.length, tabIds.length - 1)}
+        {tabButton(TEMP, state.tempFilters.length > 1 ? 'Temp Filters' : 'Temp Filter', (activeFilter.termKeys.length + (activeFilter.notTermKeys?.length ?? 0)), tabIds.length - 1)}
       </div>
 
       <div
@@ -140,7 +147,7 @@ export function Config() {
           <h2 class="ltb-h2 ltb-config-title">
             <span class="ltb-swatch ltb-swatch-lg" aria-hidden="true" />
             {activeDestination ? destinationName(activeDestination) : isTempTab ? `Temporary filter: ${activeFilter.name}${state.tempFilterEnabled ? '' : ' (not applied)'}` : 'Unassigned'}
-            {isTempTab && activeFilter.termKeys.length > 0 && (
+            {isTempTab && (activeFilter.termKeys.length + (activeFilter.notTermKeys?.length ?? 0)) > 0 && (
               <button type="button" class="ltb-btn ltb-btn-small ltb-config-title-action" onClick={() => dispatch({ type: 'CLEAR_TEMP_FILTER' })}>
                 Clear filter
               </button>
@@ -148,13 +155,15 @@ export function Config() {
           </h2>
           {isTempTab && <>
             <TempFilterSwitcher manage />
-            <p class="ltb-muted">OR matches any selected term. AND requires every selected term. Changes are saved locally.</p>
+            <TempFilterLines editing={filterLine} onEdit={setFilterLine} />
+            <p class="ltb-muted">Choose a row, then click terms below to add or remove them. NOT excludes posts containing any of its terms. Changes are saved locally.</p>
           </>}
+          {activeDestination && <TempFilterLines destination={activeDestination} editing={filterLine} onEdit={setFilterLine} />}
           {!isTempTab && (
             <p class="ltb-muted">
               {isUnassignedTab
                 ? 'Terms not yet assigned to any destination category. Click a term to choose where it belongs.'
-                : 'Click a term to assign it here. Click a highlighted term to unassign it. Terms colored for another category ask for confirmation before moving.'}
+                : 'Choose MATCH to assign terms here, or NOT to exclude posts containing any chosen term. Exclusions apply only to this destination. Moving a matching term from another destination asks for confirmation.'}
             </p>
           )}
         </header>
@@ -192,7 +201,7 @@ export function Config() {
           <span class="ltb-muted" role="status" aria-live="polite">
             {inventory.status === 'loading' && `Loading terms (${progress})… `}
             {visible.length.toLocaleString()} {isUnassignedTab ? 'unassigned ' : ''}term{visible.length === 1 ? '' : 's'}
-            {isTempTab && ` · ${activeFilter.termKeys.length} in ${activeFilter.name}`}
+            {isTempTab && ` · ${(activeFilter.termKeys.length + (activeFilter.notTermKeys?.length ?? 0))} in ${activeFilter.name}`}
             {search && ' match'}
             {categoriesOnly && ' (source categories only)'}
             {!inventory.complete && inventory.status !== 'error' && ' so far'}
@@ -213,8 +222,8 @@ export function Config() {
               <TermButton
                 key={t.key}
                 term={t}
-                selected={isTempTab ? inTemp : owner === active}
-                owner={isTempTab && inTemp ? null : (owner ?? null)}
+                selected={isTempTab ? inTemp : !isUnassignedTab && filterLine === 'not' ? destinationNotSet.has(t.key) : owner === active}
+                owner={isTempTab && inTemp ? null : activeDestination && filterLine === 'not' && destinationNotSet.has(t.key) ? activeDestination : (owner ?? null)}
                 tone={isTempTab ? 'filter' : 'destination'}
                 tooltip={tooltip}
                 detail={dup ? `Source ID ${t.id} (${t.taxonomy === 'category' ? 'category' : 'tag'})` : null}

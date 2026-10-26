@@ -22,6 +22,8 @@ export type TermSort = 'alpha' | 'selected-first';
 export type FilterOperator = 'OR' | 'AND';
 
 export interface TempFilter {
+  /** Exclude posts carrying any of these terms. Missing in older configs. */
+  notTermKeys?: TermKey[];
   operator: FilterOperator;
   id: string;
   name: string;
@@ -71,6 +73,8 @@ export interface PostIndexState extends RequestState {
 
 export type PostSelections = Partial<Record<number, DestinationId>>;
 
+export type DestinationExclusions = Partial<Record<DestinationId, TermKey[]>>;
+
 export type Assignments = Partial<Record<TermKey, DestinationId>>;
 
 export interface PendingTermMove {
@@ -96,6 +100,7 @@ export interface AppState {
   termsInventory: RequestState & { complete: boolean; fetchedAt: number | null; loadedPages: number; totalPages: number | null };
 
   assignments: Assignments;
+  destinationExclusions: DestinationExclusions;
   /** Explicit editorial choice, independent of term matching. */
   postSelections: PostSelections;
   mappingRevision: number;

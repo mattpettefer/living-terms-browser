@@ -7,7 +7,7 @@ const DEBOUNCE_MS = 300;
 /** Autosaves configuration whenever an assignment change marks the store unsaved. */
 export function usePersistence(adapter: PersistenceAdapter) {
   const { state, dispatch } = useStore();
-  const { assignments, postSelections, unresolvedAssignments, excludedTermKeys } = state;
+  const { assignments, destinationExclusions, postSelections, unresolvedAssignments, excludedTermKeys } = state;
   const unsaved = state.persistence.status === 'unsaved' || state.persistence.status === 'saving';
 
   const { tempFilters, activeTempFilterId, tempFilterEnabled } = state;
@@ -25,12 +25,12 @@ export function usePersistence(adapter: PersistenceAdapter) {
     dispatch({ type: 'PERSIST_STATUS', status: 'saving' });
     const timer = window.setTimeout(() => {
       try {
-        adapter.save(buildConfigDocument({ sourceUrl: state.source.baseUrl, assignments, postSelections, excludedTermKeys, unresolvedAssignments }));
+        adapter.save(buildConfigDocument({ sourceUrl: state.source.baseUrl, assignments, destinationExclusions, postSelections, excludedTermKeys, unresolvedAssignments }));
         dispatch({ type: 'PERSIST_STATUS', status: 'saved' });
       } catch (e) {
         dispatch({ type: 'PERSIST_STATUS', status: 'error', error: e instanceof Error ? e.message : 'Could not save configuration' });
       }
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [unsaved, assignments, postSelections, unresolvedAssignments, excludedTermKeys, adapter, dispatch, state.source.baseUrl]);
+  }, [unsaved, assignments, destinationExclusions, postSelections, unresolvedAssignments, excludedTermKeys, adapter, dispatch, state.source.baseUrl]);
 }

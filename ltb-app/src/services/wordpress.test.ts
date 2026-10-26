@@ -81,3 +81,18 @@ describe('fetchTermInventory', () => {
     expect(new URL(String(spy.mock.calls[0]![0])).searchParams.get('hide_empty')).toBe('false');
   });
 });
+
+
+it('resolves every requested image when more than 100 cards need media', async () => {
+  const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = new URL(String(input));
+    const ids = url.searchParams.get('include')!.split(',').map(Number);
+    expect(ids.length).toBeLessThanOrEqual(100);
+    return jsonResponse(ids.slice(0, Number(url.searchParams.get('per_page'))).map((id) => ({ id, source_url: 'https://x/' + id + '.jpg' })));
+  });
+  const result = await fetchMediaBatch(cfg, Array.from({ length: 125 }, (_, i) => i + 1));
+  expect(spy).toHaveBeenCalledTimes(2);
+  expect(Object.keys(result)).toHaveLength(125);
+  expect(Object.values(result).every((url) => url !== null)).toBe(true);
+  expect(result[125]).toBe('https://x/125.jpg');
+});

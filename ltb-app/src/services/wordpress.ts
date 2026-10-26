@@ -195,11 +195,15 @@ const PREFERRED_SIZES = ['medium_large', 'large', 'medium'];
 export async function fetchMediaBatch(cfg: SourceConfig, ids: number[], signal?: AbortSignal): Promise<Record<number, string | null>> {
   const unique = [...new Set(ids.filter((id) => id > 0))].sort((a, b) => a - b);
   if (unique.length === 0) return {};
-  const url = buildUrl(`${restRoot(cfg)}/media`, { include: unique.join(','), per_page: Math.min(PER_PAGE, unique.length), _fields: MEDIA_FIELDS.join(',') });
-  const page = await dedupe(url, () => fetchPage<WpMedia[]>(url, signal));
+  // WordPress caps a page at 100 items, even when include contains more IDs.
+  const batches = Array.from({ length: Math.ceil(unique.length / PER_PAGE) }, (_, i) => unique.slice(i * PER_PAGE, (i + 1) * PER_PAGE));
+  const pages = await runQueue(batches.map((batch) => () => {
+    const url = buildUrl(`${restRoot(cfg)}/media`, { include: batch.join(','), per_page: batch.length, _fields: MEDIA_FIELDS.join(',') });
+    return dedupe(url, () => fetchPage<WpMedia[]>(url, signal));
+  }), CONCURRENCY);
   const out: Record<number, string | null> = {};
   for (const id of unique) out[id] = null; // Missing/deleted media resolve to an explicit null so we don't retry forever.
-  for (const m of page.data) {
+  for (const m of pages.flatMap((page) => page.data)) {
     const sizes = m.media_details?.sizes;
     out[m.id] = (sizes && PREFERRED_SIZES.map((s) => sizes[s]?.source_url).find(Boolean)) ?? m.source_url ?? null;
   }

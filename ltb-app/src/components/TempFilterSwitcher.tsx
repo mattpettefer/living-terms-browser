@@ -43,8 +43,8 @@ export function TempFilterSwitcher({ manage = false }: Props) {
               title="Activate this filter"
             >
               {f.name}
-              <span class="ltb-tf-count" aria-label={`${f.termKeys.length} terms`}>
-                {f.termKeys.length}
+              <span class="ltb-tf-count" aria-label={`${(f.termKeys.length + (f.notTermKeys?.length ?? 0))} terms`}>
+                {(f.termKeys.length + (f.notTermKeys?.length ?? 0))}
               </span>
             </button>
             <button
@@ -63,7 +63,7 @@ export function TempFilterSwitcher({ manage = false }: Props) {
               </button>
             )}
             {manage && tempFilters.length > 1 && (
-              <button type="button" class="ltb-tf-remove" aria-label={`Remove ${f.name}`} title="Remove filter" onClick={() => remove(f.id, f.name, f.termKeys.length)}>
+              <button type="button" class="ltb-tf-remove" aria-label={`Remove ${f.name}`} title="Remove filter" onClick={() => remove(f.id, f.name, (f.termKeys.length + (f.notTermKeys?.length ?? 0)))}>
                 ×
               </button>
             )}

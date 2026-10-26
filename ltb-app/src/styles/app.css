@@ -432,3 +432,13 @@
 .ltb-bulk-selection .ltb-muted { flex: 1; min-width: 220px; font-size: .85rem; }
 .ltb-root .ltb-bulk-selection .ltb-btn-primary { color: white; }
 .ltb-bulk-selection button:disabled { opacity: .5; cursor: default; }
+
+.ltb-filter-lines { display: flex; flex-direction: column; gap: 8px; flex-basis: 100%; width: 100%; }
+.ltb-filter-line { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border: 1px solid var(--ltb-border); border-radius: 8px; background: var(--ltb-bg); }
+.ltb-filter-line.is-editing { border-color: var(--ltb-accent); box-shadow: 0 0 0 1px var(--ltb-accent); }
+.ltb-root .ltb-filter-line-label { flex: 0 0 100px; padding: 7px 8px; border: 0; border-radius: 5px; background: var(--ltb-surface); color: var(--ltb-text); font-size: .78rem; font-weight: 800; text-align: center; }
+.ltb-filter-line.is-editing .ltb-filter-line-label { background: var(--ltb-accent); color: white; }
+.ltb-filter-line-terms { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.ltb-filter-line-terms > .ltb-muted { font-size: .82rem; }
+.ltb-filter-line.is-not .ltb-term.is-selected { background: #f4e8f1; border-color: #9d6a92; color: #693c60; }
+@media (max-width: 540px) { .ltb-filter-line { align-items: flex-start; gap: 8px; } .ltb-root .ltb-filter-line-label { flex-basis: 86px; } }

@@ -44,7 +44,7 @@ describe('validateImport', () => {
   it('temp filters are optional extra info: absent leaves null, present is parsed', () => {
     expect(validateImport({ assignments: {} }, ctx).tempFilters).toBeNull();
     const r = validateImport({ assignments: {}, tempFilters: { filters: [{ id: 'a', name: 'Sports', termKeys: ['category:1', 'bogus'] }], activeId: 'a' } }, ctx);
-    expect(r.tempFilters).toEqual({ filters: [{ id: 'a', name: 'Sports', termKeys: ['category:1'], operator: 'OR' }], activeId: 'a', enabled: true });
+    expect(r.tempFilters).toEqual({ filters: [{ id: 'a', name: 'Sports', termKeys: ['category:1'], notTermKeys: [], operator: 'OR' }], activeId: 'a', enabled: true });
   });
 
   it('rejects a newer schema', () => {

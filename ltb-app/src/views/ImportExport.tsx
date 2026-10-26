@@ -27,6 +27,7 @@ export function ImportExport() {
         buildConfigDocument({
           sourceUrl: state.source.baseUrl,
           assignments: state.assignments,
+          destinationExclusions: state.destinationExclusions,
           postSelections: state.postSelections,
           excludedTermKeys: state.excludedTermKeys,
           unresolvedAssignments: state.unresolvedAssignments,
@@ -47,7 +48,7 @@ export function ImportExport() {
         excludedTermKeys: new Set(state.excludedTermKeys),
         knownTermKeys: state.termsInventory.complete ? new Set(Object.keys(state.termsByKey) as never[]) : null,
       });
-      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, postSelections: result.postSelections, tempFilters: result.tempFilters });
+      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, postSelections: result.postSelections, destinationExclusions: result.destinationExclusions, tempFilters: result.tempFilters });
       const n = Object.keys(result.assignments).length;
       const parts = [`Imported ${n} assignment${n === 1 ? '' : 's'}.`];
       if (result.postSelections) parts.push(Object.keys(result.postSelections).length + ' post selections restored.');

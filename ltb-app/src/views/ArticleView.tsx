@@ -41,7 +41,7 @@ export function ArticleView() {
     );
   }
 
-  const matches = getPostMatches(post, state.assignments, excluded);
+  const matches = getPostMatches(post, state.assignments, excluded, state.destinationExclusions);
   const matched = getMatchedDestinations(matches);
   const activeFilter = getActiveTempFilter(state);
   const filterSet = new Set(activeFilter.termKeys);
@@ -100,7 +100,7 @@ export function ArticleView() {
                   : owner
                     ? `Assigned to ${destinationName(owner)}`
                     : null;
-                const filterNote = inFilter ? `Selected in ${activeFilter.name} — click to remove.` : isExcluded ? null : `Click to add this term to ${activeFilter.name}.`;
+                const filterNote = activeFilter.notTermKeys?.includes(key) ? 'Excluded by ' + activeFilter.name + ' (NOT) — click to move to matching terms.' : inFilter ? `Selected in ${activeFilter.name} — click to remove.` : isExcluded ? null : `Click to add this term to ${activeFilter.name}.`;
                 const tooltip = [base, filterNote].filter(Boolean).join(' ') || null;
                 const detail = term ? null : 'Label not yet resolved';
 

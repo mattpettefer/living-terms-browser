@@ -1,6 +1,6 @@
 import { DESTINATIONS, migrateDestinationId } from '../state/destinations';
 import { newTempFilter, type TempFilterSnapshot } from '../state/reducer';
-import type { Assignments, PostSelections, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
+import type { Assignments, DestinationExclusions, PostSelections, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
 import { normalizeSourceUrl, parseTermKey } from './normalize';
 
 export const CONFIG_SCHEMA_VERSION = 1;
@@ -10,6 +10,7 @@ export interface ConfigDocument {
   sourceUrl: string;
   destinations: Array<{ id: DestinationId; name: string }>;
   assignments: Assignments;
+  destinationExclusions?: DestinationExclusions;
   postSelections?: PostSelections;
   excludedTermKeys: TermKey[];
   unresolvedAssignments?: UnresolvedAssignment[];
@@ -21,6 +22,7 @@ export interface ConfigDocument {
 export interface ImportResult {
   assignments: Assignments;
   unresolved: UnresolvedAssignment[];
+  destinationExclusions: DestinationExclusions | null;
   postSelections: PostSelections | null;
   /** Present only when the document carried temp filters. */
   tempFilters: TempFilterSnapshot | null;
@@ -46,6 +48,7 @@ export function storageKey(sourceUrl: string): string {
 export function buildConfigDocument(input: {
   sourceUrl: string;
   assignments: Assignments;
+  destinationExclusions?: DestinationExclusions;
   postSelections?: PostSelections;
   excludedTermKeys: TermKey[];
   unresolvedAssignments: UnresolvedAssignment[];
@@ -60,6 +63,7 @@ export function buildConfigDocument(input: {
     unresolvedAssignments: input.unresolvedAssignments,
     modifiedAt: new Date().toISOString(),
   };
+  if (input.destinationExclusions) doc.destinationExclusions = input.destinationExclusions;
   if (input.postSelections) doc.postSelections = input.postSelections;
   if (input.tempFilters) doc.tempFilters = input.tempFilters;
   return doc;
@@ -105,7 +109,8 @@ export function parseTempFilters(parsed: unknown): TempFilterSnapshot | null {
     .map((f, i) => ({
       id: typeof f.id === 'string' && f.id ? f.id : `tf-import-${i}`,
       name: typeof f.name === 'string' && f.name.trim() ? f.name : `Filter ${i + 1}`,
-      termKeys: cleanKeys(f.termKeys),
+      termKeys: cleanKeys(f.termKeys).filter((key) => !cleanKeys(f.notTermKeys).includes(key)),
+      notTermKeys: cleanKeys(f.notTermKeys),
       operator: f.operator === 'AND' ? 'AND' : 'OR',
     }));
   return { filters, activeId: typeof doc.activeId === 'string' ? doc.activeId : '', enabled: typeof doc.enabled === 'boolean' ? doc.enabled : true };
@@ -211,5 +216,26 @@ export function validateImport(
       postSelections[Number(id)] = destination;
     }
   }
-  return { assignments, unresolved, tempFilters, postSelections };
+  let destinationExclusions: DestinationExclusions | null = null;
+  if (doc.destinationExclusions !== undefined) {
+    if (!doc.destinationExclusions || typeof doc.destinationExclusions !== 'object' || Array.isArray(doc.destinationExclusions)) throw new Error('Destination exclusions must be an object.');
+    destinationExclusions = {};
+    for (const [rawDestination, rawKeys] of Object.entries(doc.destinationExclusions)) {
+      const destination = migrateDestinationId(rawDestination);
+      if (!destination || !Array.isArray(rawKeys)) throw new Error('Invalid destination exclusion: ' + rawDestination);
+      const keys: TermKey[] = [];
+      for (const rawKey of rawKeys) {
+        if (typeof rawKey !== 'string' || !parseTermKey(rawKey)) throw new Error('Invalid exclusion term key: ' + rawKey);
+        const key = rawKey as TermKey;
+        if (ctx.excludedTermKeys.has(key) || (ctx.knownTermKeys && !ctx.knownTermKeys.has(key))) {
+          unresolved.push({ termKey: key, destination, reason: 'NOT term unavailable in the source inventory' });
+          continue;
+        }
+        keys.push(key);
+        if (assignments[key] === destination) delete assignments[key];
+      }
+      destinationExclusions[destination] = [...new Set([...(destinationExclusions[destination] ?? []), ...keys])];
+    }
+  }
+  return { assignments, unresolved, tempFilters, postSelections, destinationExclusions };
 }
