@@ -5,12 +5,14 @@ import type { ConfigTab, DestinationId } from '../state/types';
 
 export type Route =
   | { view: 'overview'; category: DestinationId | 'all' }
+  | { view: 'selections'; category: DestinationId | 'all' }
   | { view: 'config'; category: ConfigTab }
   | { view: 'article'; postId: number };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const [head, arg] = parts;
+  if (head === 'selections') return { view: 'selections', category: isDestinationId(arg) ? arg : 'all' };
   if (head === 'config') return { view: 'config', category: isDestinationId(arg) || arg === 'unassigned' || arg === 'temp-filter' ? arg : 'campus-life' };
   if (head === 'article' && arg && /^\d+$/.test(arg)) return { view: 'article', postId: Number(arg) };
   return { view: 'overview', category: isDestinationId(arg) ? arg : 'all' };
@@ -23,7 +25,7 @@ export function routeToHash(route: Route): string {
     case 'article':
       return `#/article/${route.postId}`;
     default:
-      return route.category === 'all' ? '#/overview' : `#/overview/${route.category}`;
+      return route.category === 'all' ? '#/' + route.view : '#/' + route.view + '/' + route.category;
   }
 }
 
@@ -41,9 +43,9 @@ export function useHashRouter() {
   useEffect(() => {
     const apply = () => {
       const route = parseHash(window.location.hash);
-      if (route.view === 'overview') {
-        dispatch({ type: 'SET_OVERVIEW_CATEGORY', category: route.category });
-        dispatch({ type: 'NAVIGATE', view: 'overview' });
+      if (route.view === 'overview' || route.view === 'selections') {
+        dispatch({ type: route.view === 'selections' ? 'SET_SELECTIONS_CATEGORY' : 'SET_OVERVIEW_CATEGORY', category: route.category });
+        dispatch({ type: 'NAVIGATE', view: route.view });
       } else if (route.view === 'config') dispatch({ type: 'NAVIGATE', view: 'config', category: route.category });
       else dispatch({ type: 'NAVIGATE', view: 'article', postId: route.postId });
     };

@@ -35,23 +35,3 @@ export function migrateDestinationId(value: unknown): DestinationId | null {
 export function destinationName(id: DestinationId): string {
   return DESTINATIONS.find((d) => d.id === id)?.name ?? id;
 }
-
-/**
- * Source term names that are never offered for assignment. Matched
- * case-insensitively against normalized names in either taxonomy; actual keys
- * are resolved from the live inventory, never hardcoded.
- */
-export const EXCLUDED_TERM_NAMES: readonly string[] = [
-  'slice of life',
-  'faces of life',
-  'faces of life friday',
-  'podcast',
-];
-
-export function normalizeTermName(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-export function isExcludedTermName(name: string): boolean {
-  return EXCLUDED_TERM_NAMES.includes(normalizeTermName(name));
-}

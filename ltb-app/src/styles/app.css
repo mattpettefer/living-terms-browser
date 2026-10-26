@@ -420,3 +420,15 @@
 .ltb-tf-operator:hover { background: rgba(128, 128, 128, 0.2); }
 .ltb-tf-pill.is-active .ltb-tf-operator { border-left-color: rgba(255, 255, 255, 0.3); }
 .ltb-tf-operator:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
+
+/* One explicit destination per post, separate from matched categories below. */
+.ltb-card-selection { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 10px 12px; }
+.ltb-root .ltb-selection-button { appearance: none; min-width: 0; min-height: 32px; padding: 6px 0; border: 1px solid color-mix(in srgb, var(--selection-color) 30%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--selection-color) 8%, white); color: var(--selection-color); opacity: .6; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; transition: opacity .12s, background .12s; }
+.ltb-root .ltb-selection-button:hover, .ltb-root .ltb-selection-button:focus-visible { opacity: 1; }
+.ltb-root .ltb-selection-button.is-selected { opacity: 1; background: var(--selection-color); border-color: var(--selection-color); color: white; font-weight: 800; box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-color) 25%, transparent); }
+.ltb-root .ltb-selection-button:focus-visible { outline: 2px solid var(--selection-color); outline-offset: 2px; }
+
+.ltb-bulk-selection { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0 0 18px; }
+.ltb-bulk-selection .ltb-muted { flex: 1; min-width: 220px; font-size: .85rem; }
+.ltb-root .ltb-bulk-selection .ltb-btn-primary { color: white; }
+.ltb-bulk-selection button:disabled { opacity: .5; cursor: default; }

@@ -39,11 +39,11 @@ A source category named Athletics is simply another assignable term. It has no a
 
 Identical names do not establish identical terms. Preserve distinct source keys. Do not merge a category and a tag solely because their labels match. If duplicate labels need disambiguation, expose their source term IDs in a consistent tooltip or secondary inspection detail, without introducing category-versus-tag styling.
 
-### Excluded terms
+### Source term availability (updated October 26, 2026)
 
-Preserve the exclusions established during planning: **Slice of LIFE**, **Faces of LIFE**, **FACES of LIFE FRIDAY**, and **Podcast**, including equivalent capitalization variants in either taxonomy. Resolve their real keys from the source inventory and keep an explicit excluded-term set.
+All source categories and tags are available for assignment, including **Slice of LIFE**, **Faces of LIFE**, **FACES of LIFE FRIDAY**, and **Podcast**. The previous name-based exclusions have been removed.
 
-These exclusions concern the terms available for assignment. They are not a blanket instruction to discard every post carrying one of those terms. A post can still match through its other assigned terms. Article detail should retain visibility of all attached source terms, including excluded ones, so its metadata is complete; excluded terms are neutral and do not contribute to matching. Do not offer them as assignable Config buttons.
+The legacy `excludedTermKeys` field remains empty for configuration compatibility. Historical exclusion references below are superseded by this rule. These terms work like other terms in Config, article detail, destination matching, and temporary filters.
 
 ## 3. Matching and assignment rules
 

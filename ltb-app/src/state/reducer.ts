@@ -1,4 +1,5 @@
 import { DESTINATIONS } from './destinations';
+import { getOverviewResults, getSelectionResults } from './selectors';
 import type {
   AppState,
   Assignments,
@@ -6,6 +7,7 @@ import type {
   DestinationId,
   FilterOperator,
   PostRecord,
+  PostSelections,
   SourceTerm,
   TempFilter,
   TermKey,
@@ -14,9 +16,14 @@ import type {
 } from './types';
 
 export type Action =
-  | { type: 'NAVIGATE'; view: 'overview' }
+  | { type: 'NAVIGATE'; view: 'overview' | 'selections' }
   | { type: 'NAVIGATE'; view: 'config'; category?: ConfigTab }
   | { type: 'NAVIGATE'; view: 'article'; postId: number }
+  | { type: 'DESELECT_ALL'; destination: DestinationId; view: 'overview' | 'selections' }
+  | { type: 'SELECT_ALL_OVERVIEW'; destination: DestinationId }
+  | { type: 'SELECT_POST_DESTINATION'; postId: number; destination: DestinationId | null }
+  | { type: 'SET_SELECTIONS_CATEGORY'; category: DestinationId | 'all' }
+  | { type: 'SET_SELECTIONS_SCROLL'; scrollY: number }
   | { type: 'SET_OVERVIEW_CATEGORY'; category: DestinationId | 'all' }
   | { type: 'SET_OVERVIEW_SCROLL'; scrollY: number }
   | { type: 'SET_CONFIG_CATEGORY'; category: ConfigTab }
@@ -35,7 +42,7 @@ export type Action =
   | { type: 'INDEX_LOAD_ERROR'; requestId: string; error: string }
   | { type: 'INDEX_LOAD_RESET' }
   | { type: 'MEDIA_RESOLVED'; media: Record<number, string | null> }
-  | { type: 'SHOW_MORE_POSTS'; pageSize: number }
+  | { type: 'SHOW_MORE_POSTS'; pageSize: number; view?: 'overview' | 'selections' }
   | { type: 'ARTICLE_START'; postId: number; requestId: string }
   | { type: 'ARTICLE_SUCCESS'; postId: number; requestId: string; post: PostRecord }
   | { type: 'ARTICLE_ERROR'; postId: number; requestId: string; error: string }
@@ -44,7 +51,7 @@ export type Action =
   | { type: 'OPEN_MOVE'; termKey: TermKey; fromCategory: DestinationId; toCategory: DestinationId }
   | { type: 'CANCEL_MOVE' }
   | { type: 'CONFIRM_MOVE' }
-  | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; tempFilters?: TempFilterSnapshot | null }
+  | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; postSelections?: PostSelections | null; tempFilters?: TempFilterSnapshot | null }
   | { type: 'TOGGLE_TEMP_FILTER_TERM'; termKey: TermKey; filterId?: string }
   | { type: 'SET_TEMP_FILTER_OPERATOR'; filterId: string; operator: FilterOperator }
   | { type: 'CLEAR_TEMP_FILTER'; filterId?: string }
@@ -76,7 +83,7 @@ export function normalizeTempFilters(snapshot?: Partial<TempFilterSnapshot> | nu
 
 export function createInitialState(
   source: AppState['source'],
-  saved?: { assignments: Assignments; unresolved: UnresolvedAssignment[] },
+  saved?: { assignments: Assignments; unresolved: UnresolvedAssignment[]; postSelections?: PostSelections | null },
   tempFilters?: Partial<TempFilterSnapshot> | null,
   pageSeed: string | null = null,
 ): AppState {
@@ -90,6 +97,7 @@ export function createInitialState(
     excludedTermKeys: [],
     termsInventory: { status: 'idle', error: null, requestId: null, complete: false, fetchedAt: null, loadedPages: 0, totalPages: null },
     assignments: saved?.assignments ?? {},
+    postSelections: saved?.postSelections ?? {},
     mappingRevision: 0,
     tempFilters: tf.filters,
     activeTempFilterId: tf.activeId,
@@ -102,6 +110,10 @@ export function createInitialState(
     articleRequestsById: {},
     ui: {
       view: 'overview',
+      listView: 'overview',
+      selectionsCategory: 'all',
+      selectionsPage: 1,
+      selectionsScrollY: 0,
       overviewCategory: 'all',
       overviewPage: 1,
       overviewScrollY: 0,
@@ -195,9 +207,47 @@ export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'NAVIGATE': {
       const ui = { ...state.ui, pendingTermMove: null, view: action.view };
+      if (action.view === 'overview' || action.view === 'selections') ui.listView = action.view;
       if (action.view === 'config' && action.category) ui.activeConfigCategory = action.category;
       if (action.view === 'article') ui.selectedPostId = action.postId;
       return { ...state, ui };
+    }
+    case 'SET_SELECTIONS_CATEGORY':
+      return state.ui.selectionsCategory === action.category ? state : { ...state, ui: { ...state.ui, selectionsCategory: action.category, selectionsPage: 1, selectionsScrollY: 0 } };
+    case 'SET_SELECTIONS_SCROLL':
+      return { ...state, ui: { ...state.ui, selectionsScrollY: action.scrollY } };
+    case 'DESELECT_ALL': {
+      if (!state.postIndex.complete || state.postIndex.status !== 'success') return state;
+      const { matching } = action.view === 'selections' ? getSelectionResults(state, action.destination) : getOverviewResults(state, action.destination);
+      const postSelections = { ...state.postSelections };
+      let changed = false;
+      for (const post of matching) {
+        if (postSelections[post.id] !== action.destination) continue;
+        delete postSelections[post.id];
+        changed = true;
+      }
+      return changed ? { ...state, postSelections, persistence: { ...state.persistence, status: 'unsaved', error: null } } : state;
+    }
+    case 'SELECT_ALL_OVERVIEW': {
+      // Never commit a partial selection while source pages are still loading.
+      if (!state.postIndex.complete || state.postIndex.status !== 'success') return state;
+      const { matching } = getOverviewResults(state, action.destination);
+      const postSelections = { ...state.postSelections };
+      let changed = false;
+      for (const post of matching) {
+        if (postSelections[post.id] === action.destination) continue;
+        postSelections[post.id] = action.destination;
+        changed = true;
+      }
+      return changed ? { ...state, postSelections, persistence: { ...state.persistence, status: 'unsaved', error: null } } : state;
+    }
+    case 'SELECT_POST_DESTINATION': {
+      if (!Number.isSafeInteger(action.postId) || action.postId <= 0) return state;
+      if ((state.postSelections[action.postId] ?? null) === action.destination) return state;
+      const postSelections = { ...state.postSelections };
+      if (action.destination) postSelections[action.postId] = action.destination;
+      else delete postSelections[action.postId];
+      return { ...state, postSelections, persistence: { ...state.persistence, status: 'unsaved', error: null } };
     }
     case 'SET_OVERVIEW_CATEGORY':
       if (state.ui.overviewCategory === action.category) return state;
@@ -266,6 +316,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'MEDIA_RESOLVED':
       return { ...state, mediaById: { ...state.mediaById, ...action.media } };
     case 'SHOW_MORE_POSTS':
+      if (action.view === 'selections') return { ...state, ui: { ...state.ui, selectionsPage: state.ui.selectionsPage + 1 } };
       return { ...state, ui: { ...state.ui, overviewPage: state.ui.overviewPage + 1 } };
 
     case 'ARTICLE_START':
@@ -321,6 +372,7 @@ export function reducer(state: AppState, action: Action): AppState {
         if (!state.excludedTermKeys.includes(k)) assignments[k] = v;
       }
       const next = { ...commitAssignments(state, assignments), unresolvedAssignments: action.unresolved };
+      if (action.postSelections != null) next.postSelections = action.replace ? { ...action.postSelections } : { ...state.postSelections, ...action.postSelections };
       if (action.tempFilters) {
         const tf = normalizeTempFilters(action.tempFilters);
         return { ...next, tempFilters: tf.filters, activeTempFilterId: tf.activeId, tempFilterEnabled: tf.enabled ?? true };

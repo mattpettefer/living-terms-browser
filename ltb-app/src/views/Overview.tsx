@@ -13,26 +13,34 @@ import {
   getExcludedSet,
   getMatchedDestinations,
   getOverviewResults,
+  getSelectionResults,
+  getSelectionCounts,
   getPostMatches,
   getTempFilterTerms,
 } from '../state/selectors';
 import type { DestinationId } from '../state/types';
 
-export function Overview() {
+export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selections' }) {
   const { state, dispatch } = useStore();
-  const category = state.ui.overviewCategory;
+  const selections = mode === 'selections';
+  const category = selections ? state.ui.selectionsCategory : state.ui.overviewCategory;
+  const page = selections ? state.ui.selectionsPage : state.ui.overviewPage;
+  const scrollY = selections ? state.ui.selectionsScrollY : state.ui.overviewScrollY;
   const { index, retry } = usePostIndex();
   const excluded = getExcludedSet(state);
-  const counts = getAssignmentCounts(state);
+  const counts = selections ? getSelectionCounts(state) : getAssignmentCounts(state);
   const restored = useRef(false);
 
   // Everything below is derived locally from the complete post index.
   const { matching, primaryCount, emptyAssignment } = useMemo(
-    () => getOverviewResults(state, category),
-    [state.postOrder, state.postsById, state.assignments, state.excludedTermKeys, state.tempFilters, state.activeTempFilterId, state.tempFilterEnabled, category],
+    () => selections ? getSelectionResults(state, category) : getOverviewResults(state, category),
+    [mode, state.postSelections, state.postOrder, state.postsById, state.assignments, state.excludedTermKeys, state.tempFilters, state.activeTempFilterId, state.tempFilterEnabled, category],
   );
-  const shown = matching.slice(0, state.ui.overviewPage * OVERVIEW_PAGE_SIZE);
+  const shown = matching.slice(0, page * OVERVIEW_PAGE_SIZE);
   const hasMore = shown.length < matching.length;
+  const selectedCount = matching.filter((post) => state.postSelections[post.id] === category).length;
+  const allSelected = matching.length > 0 && selectedCount === matching.length;
+  const bulkReady = index.complete && index.status === 'success';
   useMediaBatch(shown);
 
   const activeFilter = getActiveTempFilter(state);
@@ -45,16 +53,16 @@ export function Overview() {
   useLayoutEffect(() => {
     if (restored.current || shown.length === 0) return;
     restored.current = true;
-    if (state.ui.overviewScrollY > 0) window.scrollTo(0, state.ui.overviewScrollY);
-  }, [shown.length, state.ui.overviewScrollY]);
+    window.scrollTo(0, scrollY);
+  }, [shown.length, scrollY]);
 
   useEffect(() => {
-    return () => dispatch({ type: 'SET_OVERVIEW_SCROLL', scrollY: window.scrollY });
-  }, [dispatch]);
+    return () => dispatch({ type: selections ? 'SET_SELECTIONS_SCROLL' : 'SET_OVERVIEW_SCROLL', scrollY: window.scrollY });
+  }, [dispatch, selections]);
 
   const select = (next: DestinationId | 'all') => {
     restored.current = true;
-    navigate({ view: 'overview', category: next });
+    navigate({ view: mode, category: next });
   };
 
   const label = category === 'all' ? 'All Posts' : state.destinationCategories.find((d) => d.id === category)?.name;
@@ -76,7 +84,7 @@ export function Overview() {
             class={`ltb-filter${category === d.id ? ' is-active' : ''}`}
             aria-pressed={category === d.id}
             onClick={() => select(d.id)}
-            title={`${counts[d.id]} assigned term${counts[d.id] === 1 ? '' : 's'}`}
+            title={`${counts[d.id]} ${selections ? 'selected post' : 'assigned term'}${counts[d.id] === 1 ? '' : 's'}`}
           >
             {d.name}
             <span class="ltb-filter-count" aria-hidden="true">
@@ -86,6 +94,8 @@ export function Overview() {
         ))}
       </nav>
 
+      {selections && <p class="ltb-muted">Browse by the destination selected on each card. Term matches remain separate.</p>}
+      {state.persistence.status === 'error' && <ErrorState message={state.persistence.error ?? 'Could not save selections.'} onRetry={() => dispatch({ type: 'PERSIST_STATUS', status: 'unsaved' })} />}
       {showTempBar && (
         <div class="ltb-temp-bar" role="region" aria-label="Temporary filter">
           <TempFilterSwitcher />
@@ -132,6 +142,27 @@ export function Overview() {
         )}
       </header>
 
+      {category !== 'all' && (
+        <div class="ltb-bulk-selection">
+          {!selections && <button type="button" class="ltb-btn ltb-btn-primary" disabled={!bulkReady || matching.length === 0 || allSelected}
+            onClick={() => dispatch({ type: 'SELECT_ALL_OVERVIEW', destination: category })}>
+            {bulkReady && allSelected ? 'All selected' : 'Select all'}
+          </button>}
+          <button type="button" class="ltb-btn" disabled={!bulkReady || selectedCount === 0}
+            title={'Clear ' + label + ' selections for every matching post, including posts behind Show more.'}
+            onClick={() => dispatch({ type: 'DESELECT_ALL', destination: category, view: mode })}>
+            Deselect all
+          </button>
+          <span class="ltb-muted" role="status" aria-live="polite">
+            {!bulkReady
+              ? index.status === 'error' ? 'Finish loading all posts before changing selections. Retry below.' : 'Loading all posts before selection controls are available…'
+              : selections ? 'Clear ' + selectedCount.toLocaleString() + ' matching selections for ' + label + ', including posts behind Show more.'
+              : allSelected ? 'All ' + matching.length.toLocaleString() + ' matching posts are selected for ' + label + '.'
+              : 'Select all ' + matching.length.toLocaleString() + ' matching posts for ' + label + ', including posts behind Show more. Existing choices will be replaced.'}
+          </span>
+        </div>
+      )}
+
       {emptyAssignment ? (
         <EmptyState title="No terms are assigned to this category yet.">
           <p>
@@ -143,7 +174,7 @@ export function Overview() {
       ) : index.status === 'loading' && state.postOrder.length === 0 ? (
         <LoadingState label="Loading posts…" />
       ) : matching.length === 0 && index.complete ? (
-        <EmptyState title={tempActive ? `No posts in this category match ${activeFilter.operator === 'AND' ? 'all' : 'any'} of the terms in ${activeFilter.name}.` : 'No published posts match the assigned terms.'} />
+        <EmptyState title={tempActive ? `No posts in this category match ${activeFilter.operator === 'AND' ? 'all' : 'any'} of the terms in ${activeFilter.name}.` : selections ? 'No posts have been selected for this destination yet.' : 'No published posts match the assigned terms.'} />
       ) : (
         <>
           <div class="ltb-grid">
@@ -160,7 +191,7 @@ export function Overview() {
             {index.status === 'error' && <ErrorState message={`Post index incomplete: ${index.error ?? 'request failed'}`} onRetry={retry} />}
             {matching.length === 0 && partial && <LoadingState label="Searching remaining posts…" />}
             {hasMore && (
-              <button type="button" class="ltb-btn" onClick={() => dispatch({ type: 'SHOW_MORE_POSTS', pageSize: OVERVIEW_PAGE_SIZE })}>
+              <button type="button" class="ltb-btn" onClick={() => dispatch({ type: 'SHOW_MORE_POSTS', pageSize: OVERVIEW_PAGE_SIZE, view: mode })}>
                 Show more ({(matching.length - shown.length).toLocaleString()} remaining)
               </button>
             )}

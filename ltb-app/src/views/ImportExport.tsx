@@ -27,6 +27,7 @@ export function ImportExport() {
         buildConfigDocument({
           sourceUrl: state.source.baseUrl,
           assignments: state.assignments,
+          postSelections: state.postSelections,
           excludedTermKeys: state.excludedTermKeys,
           unresolvedAssignments: state.unresolvedAssignments,
           tempFilters: exportableTempFilters(),
@@ -46,9 +47,10 @@ export function ImportExport() {
         excludedTermKeys: new Set(state.excludedTermKeys),
         knownTermKeys: state.termsInventory.complete ? new Set(Object.keys(state.termsByKey) as never[]) : null,
       });
-      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, tempFilters: result.tempFilters });
+      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, postSelections: result.postSelections, tempFilters: result.tempFilters });
       const n = Object.keys(result.assignments).length;
       const parts = [`Imported ${n} assignment${n === 1 ? '' : 's'}.`];
+      if (result.postSelections) parts.push(Object.keys(result.postSelections).length + ' post selections restored.');
       if (result.tempFilters) parts.push(`${result.tempFilters.filters.length} temporary filter${result.tempFilters.filters.length === 1 ? '' : 's'} restored.`);
       if (result.unresolved.length) parts.push(`${result.unresolved.length} entr${result.unresolved.length === 1 ? 'y' : 'ies'} need review.`);
       setMessage({ kind: 'ok', text: parts.join(' ') });

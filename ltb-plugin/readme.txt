@@ -55,3 +55,34 @@ Add "operator": "AND" to an individual filter in imported or shortcode JSON:
 Replace the example term IDs with real source IDs. Use "OR" to match any term.
 Older filters without an operator default to OR. The lenient import parser
 also treats unrecognized operator values as OR.
+
+== Source term availability ==
+
+All source categories and tags are available for assignment and temporary
+filters, including Slice of LIFE, Faces of LIFE, FACES of LIFE FRIDAY, and
+Podcast. The previous name-based exclusions no longer apply.
+== Post selections ==
+
+Overview continues to group posts by their source-term assignments. The middle
+Selections tab has All Posts and the same six destination tabs, using each
+post's explicit selection instead. All Posts includes posts with no selection.
+
+The six colored buttons above each card's category divider choose one
+destination. Selecting another replaces it; clicking the active choice clears
+it. The solid button is selected and the other buttons are faded. Hover for
+full category names. Choices are saved locally and are included in JSON and
+shortcode exports as postSelections, keyed by source post ID.
+
+Importing older configurations without postSelections preserves current
+choices. With postSelections present, Replace replaces the choices and Merge
+merges them. Term-mapping edits never overwrite explicit post selections.
+Overview destination tabs include Select all. It assigns every post matching
+that destination and the active temporary filter, including cards behind
+Show more. The action waits for the complete source post index and stays
+disabled if loading fails. Matching posts' existing destination choices are
+replaced; nonmatching posts and source-term assignments are unchanged.
+Deselect all is available in destination sections of both Overview and
+Selections. It clears that destination's choices across the full matching
+set, including cards behind Show more, and respects the temporary filter.
+Choices for other destinations are preserved. Like Select all, it waits for
+the complete post index before becoming available.

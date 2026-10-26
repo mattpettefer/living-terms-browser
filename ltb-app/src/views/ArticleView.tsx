@@ -16,7 +16,7 @@ export function ArticleView() {
   const postId = state.ui.selectedPostId;
   const { post, request, retry } = useArticle(postId);
   const excluded = getExcludedSet(state);
-  const backHref = routeToHash({ view: 'overview', category: state.ui.overviewCategory });
+  const backHref = routeToHash({ view: state.ui.listView, category: state.ui.listView === 'selections' ? state.ui.selectionsCategory : state.ui.overviewCategory });
 
   const content = useMemo(
     () => (post?.contentLoaded ? prepareContent(post.contentHtml ?? '', state.source.baseUrl, post.imageUrl) : null),
@@ -27,7 +27,7 @@ export function ArticleView() {
   if (!post && request?.status === 'error') {
     return (
       <section class="ltb-article">
-        <a class="ltb-back" href={backHref}>← Back to Overview</a>
+        <a class="ltb-back" href={backHref}>← Back to {state.ui.listView === 'selections' ? 'Selections' : 'Overview'}</a>
         <ErrorState message={request.error === 'Source request failed (404)' ? 'This article could not be found on the source site.' : (request.error ?? 'Request failed')} onRetry={retry} />
       </section>
     );
@@ -35,7 +35,7 @@ export function ArticleView() {
   if (!post) {
     return (
       <section class="ltb-article">
-        <a class="ltb-back" href={backHref}>← Back to Overview</a>
+        <a class="ltb-back" href={backHref}>← Back to {state.ui.listView === 'selections' ? 'Selections' : 'Overview'}</a>
         <LoadingState label="Loading article…" />
       </section>
     );
@@ -52,7 +52,7 @@ export function ArticleView() {
 
   return (
     <section class="ltb-article">
-      <a class="ltb-back" href={backHref}>← Back to Overview</a>
+      <a class="ltb-back" href={backHref}>← Back to {state.ui.listView === 'selections' ? 'Selections' : 'Overview'}</a>
       <div class="ltb-article-layout">
         <article class="ltb-article-main">
           <header class="ltb-article-header">

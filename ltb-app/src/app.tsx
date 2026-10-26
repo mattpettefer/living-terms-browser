@@ -23,16 +23,17 @@ export function App({ persistence }: { persistence: PersistenceAdapter }) {
           <span class="ltb-brand-source">{state.source.baseUrl.replace(/^https?:\/\//, '')}</span>
         </div>
         <nav class="ltb-nav" aria-label="Main">
-          <a class={`ltb-nav-link${view === 'overview' || view === 'article' ? ' is-active' : ''}`} aria-current={view === 'overview' ? 'page' : undefined} href="#/overview">
+          <a class={`ltb-nav-link${view === 'overview' || (view === 'article' && state.ui.listView === 'overview') ? ' is-active' : ''}`} aria-current={view === 'overview' ? 'page' : undefined} href="#/overview">
             Overview
           </a>
+          <a class={'ltb-nav-link' + (view === 'selections' || (view === 'article' && state.ui.listView === 'selections') ? ' is-active' : '')} aria-current={view === 'selections' ? 'page' : undefined} href={'#/selections/' + state.ui.selectionsCategory}>Selections</a>
           <a class={`ltb-nav-link${view === 'config' ? ' is-active' : ''}`} aria-current={view === 'config' ? 'page' : undefined} href={`#/config/${state.ui.activeConfigCategory}`}>
             Config
           </a>
         </nav>
       </header>
       <main class="ltb-main">
-        {view === 'overview' && <Overview />}
+        {(view === 'overview' || view === 'selections') && <Overview key={view} mode={view} />}
         {view === 'config' && <Config />}
         {view === 'article' && <ArticleView />}
       </main>

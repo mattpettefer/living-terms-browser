@@ -120,6 +120,19 @@ export function getOverviewResults(state: AppState, category: DestinationId | 'a
   return { matching: applyTempFilter(primary, tempKeys, activeFilter.operator), primaryCount: primary.length, emptyAssignment };
 }
 
+/** Explicit choices are independent of source-term assignments. */
+export function getSelectionResults(state: AppState, category: DestinationId | 'all'): OverviewResults {
+  const primary = state.postOrder.map((id) => state.postsById[id]).filter((p): p is PostRecord => !!p && (category === 'all' || state.postSelections[p.id] === category));
+  const filter = getActiveTempFilter(state);
+  return { matching: applyTempFilter(primary, state.tempFilterEnabled ? filter.termKeys : [], filter.operator), primaryCount: primary.length, emptyAssignment: false };
+}
+
+export function getSelectionCounts(state: AppState): Record<DestinationId, number> {
+  const counts = Object.fromEntries(state.destinationCategories.map((d) => [d.id, 0])) as Record<DestinationId, number>;
+  for (const id of state.postOrder) { const destination = state.postSelections[id]; if (destination && state.postsById[id]) counts[destination]++; }
+  return counts;
+}
+
 export function getDuplicateNameCounts(state: AppState): Map<string, number> {
   const counts = new Map<string, number>();
   for (const key of state.termOrder) {

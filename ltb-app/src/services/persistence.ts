@@ -1,6 +1,6 @@
 import { DESTINATIONS, migrateDestinationId } from '../state/destinations';
 import { newTempFilter, type TempFilterSnapshot } from '../state/reducer';
-import type { Assignments, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
+import type { Assignments, PostSelections, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
 import { normalizeSourceUrl, parseTermKey } from './normalize';
 
 export const CONFIG_SCHEMA_VERSION = 1;
@@ -10,6 +10,7 @@ export interface ConfigDocument {
   sourceUrl: string;
   destinations: Array<{ id: DestinationId; name: string }>;
   assignments: Assignments;
+  postSelections?: PostSelections;
   excludedTermKeys: TermKey[];
   unresolvedAssignments?: UnresolvedAssignment[];
   /** Optional since the temp-filter feature; older documents simply omit it. */
@@ -20,6 +21,7 @@ export interface ConfigDocument {
 export interface ImportResult {
   assignments: Assignments;
   unresolved: UnresolvedAssignment[];
+  postSelections: PostSelections | null;
   /** Present only when the document carried temp filters. */
   tempFilters: TempFilterSnapshot | null;
 }
@@ -44,6 +46,7 @@ export function storageKey(sourceUrl: string): string {
 export function buildConfigDocument(input: {
   sourceUrl: string;
   assignments: Assignments;
+  postSelections?: PostSelections;
   excludedTermKeys: TermKey[];
   unresolvedAssignments: UnresolvedAssignment[];
   tempFilters?: TempFilterSnapshot;
@@ -57,6 +60,7 @@ export function buildConfigDocument(input: {
     unresolvedAssignments: input.unresolvedAssignments,
     modifiedAt: new Date().toISOString(),
   };
+  if (input.postSelections) doc.postSelections = input.postSelections;
   if (input.tempFilters) doc.tempFilters = input.tempFilters;
   return doc;
 }
@@ -197,5 +201,15 @@ export function validateImport(
   }
   // Temp filters are optional extra information; a document without them leaves the current filters alone.
   const tempFilters = doc.tempFilters !== undefined ? parseTempFilters(doc.tempFilters) : null;
-  return { assignments, unresolved, tempFilters };
+  let postSelections: PostSelections | null = null;
+  if (doc.postSelections !== undefined) {
+    if (!doc.postSelections || typeof doc.postSelections !== 'object' || Array.isArray(doc.postSelections)) throw new Error('Post selections must be an object keyed by post ID.');
+    postSelections = {};
+    for (const [id, value] of Object.entries(doc.postSelections)) {
+      const destination = migrateDestinationId(value);
+      if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)) || !destination) throw new Error('Invalid post selection for post ' + id + '.');
+      postSelections[Number(id)] = destination;
+    }
+  }
+  return { assignments, unresolved, tempFilters, postSelections };
 }

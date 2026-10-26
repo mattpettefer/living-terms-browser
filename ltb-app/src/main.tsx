@@ -4,20 +4,20 @@ import { loadTempFilters, localStorageAdapter, unwrapShortcode, validateImport }
 import type { TempFilterSnapshot } from './state/reducer';
 import { markSeedApplied, readSeedText, seedIsNew } from './services/seed';
 import { createInitialState, StoreProvider } from './state/provider';
-import type { AppState, Assignments, UnresolvedAssignment } from './state/types';
+import type { AppState, Assignments, PostSelections, UnresolvedAssignment } from './state/types';
 import './styles/app.css';
 import './styles/article.css';
 
 const DEFAULT_SOURCE = 'https://living.life.edu';
 
-type SavedConfig = { assignments: Assignments; unresolved: UnresolvedAssignment[] };
+type SavedConfig = { postSelections: PostSelections | null; assignments: Assignments; unresolved: UnresolvedAssignment[] };
 
 function loadSaved(sourceUrl: string): SavedConfig | undefined {
   try {
     const doc = localStorageAdapter.load(sourceUrl);
     if (!doc) return undefined;
     const r = validateImport(doc, { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
-    return { assignments: r.assignments, unresolved: r.unresolved };
+    return { postSelections: r.postSelections, assignments: r.assignments, unresolved: r.unresolved };
   } catch (e) {
     console.error('[ltb] Could not restore saved configuration:', e);
     return undefined;
@@ -40,7 +40,7 @@ function applySeed(text: string | null, sourceUrl: string, hasSaved: boolean): (
     const r = validateImport(JSON.parse(unwrapShortcode(text)), { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
     markSeedApplied(sourceUrl, text);
     console.info(`[ltb] Imported ${Object.keys(r.assignments).length} assignments from page configuration.`);
-    return { assignments: r.assignments, unresolved: r.unresolved, tempFilters: r.tempFilters };
+    return { postSelections: r.postSelections, assignments: r.assignments, unresolved: r.unresolved, tempFilters: r.tempFilters };
   } catch (e) {
     console.error('[ltb] Shortcode configuration could not be imported:', e);
     return undefined;
@@ -59,8 +59,8 @@ function mount(el: HTMLElement) {
 
   const seedText = readSeedText(el);
   const saved = loadSaved(source.baseUrl);
-  const seeded = applySeed(seedText, source.baseUrl, !!saved && Object.keys(saved.assignments).length > 0);
-  const initial: AppState = createInitialState(source, seeded ?? saved, seeded?.tempFilters ?? loadTempFilters(source.baseUrl), seedText);
+  const seeded = applySeed(seedText, source.baseUrl, !!saved && (Object.keys(saved.assignments).length > 0 || Object.keys(saved.postSelections ?? {}).length > 0));
+  const initial: AppState = createInitialState(source, seeded ? { ...seeded, postSelections: seeded.postSelections ?? saved?.postSelections } : saved, seeded?.tempFilters ?? loadTempFilters(source.baseUrl), seedText);
   if (seeded) initial.persistence = { ...initial.persistence, status: 'unsaved' };
 
   render(

@@ -1,3 +1,4 @@
+import { useStore } from '../state/provider';
 import { destinationName } from '../state/destinations';
 import type { DestinationId, PostRecord } from '../state/types';
 import { stripTags } from '../services/normalize';
@@ -15,6 +16,9 @@ export function formatDate(iso: string): string {
 }
 
 export function PostCard({ post, imageUrl, matchedDestinations }: Props) {
+  const { state, dispatch } = useStore();
+  const selected = state.postSelections[post.id];
+  const shortNames = ['Campus', 'Acad.', 'News', 'Alumni', 'Health', 'Athl.'];
   const excerpt = stripTags(post.excerptHtml);
   const href = routeToHash({ view: 'article', postId: post.id });
   return (
@@ -38,6 +42,17 @@ export function PostCard({ post, imageUrl, matchedDestinations }: Props) {
           </div>
         </div>
       </a>
+      <div class="ltb-card-selection" role="group" aria-label={"Destination selection for " + post.title}>
+        {state.destinationCategories.map((d, i) => (
+          <button key={d.id} type="button" class={"ltb-selection-button" + (selected === d.id ? " is-selected" : "")}
+            style={{ "--selection-color": "var(--ltb-dest-" + d.id + ")" }}
+            aria-label={d.name} aria-pressed={selected === d.id}
+            title={selected === d.id ? d.name + " selected — click to clear" : "Select " + d.name}
+            onClick={() => dispatch({ type: "SELECT_POST_DESTINATION", postId: post.id, destination: selected === d.id ? null : d.id })}>
+            {shortNames[i]}
+          </button>
+        ))}
+      </div>
       <div class="ltb-card-footer">
         {matchedDestinations.length === 0 ? (
           <span class="ltb-pill ltb-pill-muted">Unassigned</span>

@@ -69,6 +69,8 @@ export interface PostIndexState extends RequestState {
   fetchedAt: number | null;
 }
 
+export type PostSelections = Partial<Record<number, DestinationId>>;
+
 export type Assignments = Partial<Record<TermKey, DestinationId>>;
 
 export interface PendingTermMove {
@@ -94,6 +96,8 @@ export interface AppState {
   termsInventory: RequestState & { complete: boolean; fetchedAt: number | null; loadedPages: number; totalPages: number | null };
 
   assignments: Assignments;
+  /** Explicit editorial choice, independent of term matching. */
+  postSelections: PostSelections;
   mappingRevision: number;
   /**
    * Temporary secondary filters. The active one, when non-empty, narrows every
@@ -115,7 +119,11 @@ export interface AppState {
   articleRequestsById: Record<number, RequestState>;
 
   ui: {
-    view: 'overview' | 'config' | 'article';
+    view: 'overview' | 'selections' | 'config' | 'article';
+    listView: 'overview' | 'selections';
+    selectionsCategory: DestinationId | 'all';
+    selectionsPage: number;
+    selectionsScrollY: number;
     overviewCategory: DestinationId | 'all';
     /** Number of cards currently revealed (local paging over the index). */
     overviewPage: number;
