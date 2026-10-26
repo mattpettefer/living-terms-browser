@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, newTempFilter, normalizeTempFilters, reducer, type Action } from './reducer';
-import { applyTempFilter, getActiveTempFilter, getOverviewResults, getPostMatches, getPostOverlap, getTermWarning, getVisibleTerms, sortSelectedFirst } from './selectors';
+import { applyTempFilter, getActiveTempFilter, getOverviewResults, getPostMatches, getVisibleTerms, sortSelectedFirst } from './selectors';
 import type { AppState, PostRecord, SourceTerm } from './types';
 
 const source = { baseUrl: 'https://example.test', postsRestBase: 'posts' };
@@ -173,7 +173,7 @@ describe('post index', () => {
   });
 });
 
-describe('overlap selectors', () => {
+describe('destination matches', () => {
   const assignments = { 'category:10': 'health-wellness', 'post_tag:40': 'health-wellness', 'post_tag:20': 'athletics' } as const;
   const excluded = new Set<'category:30'>(['category:30']);
 
@@ -181,17 +181,6 @@ describe('overlap selectors', () => {
     const m = getPostMatches(post(1, ['category:10', 'post_tag:40']), assignments, excluded);
     expect(Object.keys(m)).toEqual(['health-wellness']);
     expect(m['health-wellness']).toHaveLength(2);
-    expect(getPostOverlap(post(1, ['category:10', 'post_tag:40']), assignments, excluded)).toBe(false);
-  });
-
-  it('flags overlap across destinations and explains each red term', () => {
-    const p = post(2, ['category:10', 'post_tag:20', 'category:30']);
-    expect(getPostOverlap(p, assignments, excluded)).toBe(true);
-    const w = getTermWarning(p, 'post_tag:20', assignments, excluded);
-    expect(w?.destination).toBe('athletics');
-    expect(w?.otherDestinations).toEqual(['health-wellness']);
-    expect(w?.explanation).toBe('Assigned to Athletics. This article also matches Health & Wellness.');
-    expect(getTermWarning(p, 'category:30', assignments, excluded)).toBeNull();
   });
 
   it('excluded terms never match', () => {
@@ -264,11 +253,52 @@ describe('temporary filter', () => {
     expect(normalizeTempFilters(null).filters).toHaveLength(1);
   });
 
-  it('applyTempFilter requires every term (each added term narrows) and is a no-op when empty', () => {
+  it('defaults to OR, supports AND, and is a no-op when empty', () => {
     const posts = [post(1, ['category:10']), post(2, ['post_tag:20', 'category:30']), post(3, ['category:10', 'post_tag:20'])];
     expect(applyTempFilter(posts, [])).toBe(posts);
     expect(applyTempFilter(posts, ['post_tag:20']).map((p) => p.id)).toEqual([2, 3]);
-    expect(applyTempFilter(posts, ['category:10', 'post_tag:20']).map((p) => p.id)).toEqual([3]);
+    expect(applyTempFilter(posts, ['category:10', 'post_tag:20']).map((p) => p.id)).toEqual([1, 2, 3]);
+    expect(applyTempFilter(posts, ['category:10', 'post_tag:20'], 'AND').map((p) => p.id)).toEqual([3]);
+    expect(applyTempFilter(posts, [], 'AND')).toBe(posts);
     expect(applyTempFilter(posts, ['category:999'])).toEqual([]);
+  });
+});
+
+describe('saved temporary filter operators', () => {
+  it('defaults new filters to OR and updates only the requested filter', () => {
+    let s = withInventory();
+    const first = s.activeTempFilterId;
+    expect(getActiveTempFilter(s).operator).toBe('OR');
+    s = run(s, { type: 'ADD_TEMP_FILTER' });
+    const second = s.activeTempFilterId;
+    s = run(s, { type: 'SET_TEMP_FILTER_OPERATOR', filterId: first, operator: 'AND' });
+    expect(s.tempFilters.map(f => f.operator)).toEqual(['AND', 'OR']);
+    expect(s.activeTempFilterId).toBe(second);
+    expect(s.assignments).toEqual({});
+    expect(run(s, { type: 'SET_TEMP_FILTER_OPERATOR', filterId: first, operator: 'AND' })).toBe(s);
+    expect(run(s, { type: 'SET_TEMP_FILTER_OPERATOR', filterId: 'missing', operator: 'AND' })).toBe(s);
+    s = run(s, { type: 'SET_ACTIVE_TEMP_FILTER', filterId: first }, { type: 'RENAME_TEMP_FILTER', filterId: first, name: 'Renamed' }, { type: 'CLEAR_TEMP_FILTER' });
+    expect(getActiveTempFilter(s).operator).toBe('AND');
+  });
+
+  it('combines the active operator with the primary destination and respects No Filter', () => {
+    let s = run(withInventory(),
+      { type: 'INDEX_LOAD_START', requestId: 'i' },
+      { type: 'INDEX_PAGE_LOADED', requestId: 'i', posts: [post(1, ['category:10']), post(2, ['post_tag:20']), post(3, ['category:10', 'post_tag:20']), post(4, [])], loadedPages: 1, totalPages: 1, totalPosts: 4 },
+      { type: 'ASSIGN_TERM', termKey: 'category:10', destination: 'athletics' },
+      { type: 'TOGGLE_TEMP_FILTER_TERM', termKey: 'category:10' },
+      { type: 'TOGGLE_TEMP_FILTER_TERM', termKey: 'post_tag:20' });
+    const ids = (category: 'all' | 'athletics') => getOverviewResults(s, category).matching.map(p => p.id);
+    expect(ids('all')).toEqual([3, 2, 1]);
+    expect(ids('athletics')).toEqual([3, 1]);
+    s = run(s, { type: 'SHOW_MORE_POSTS', pageSize: 24 }, { type: 'SET_TEMP_FILTER_OPERATOR', filterId: s.activeTempFilterId, operator: 'AND' });
+    expect(ids('all')).toEqual([3]);
+    expect(ids('athletics')).toEqual([3]);
+    expect(s.ui.overviewPage).toBe(1);
+    s = run(s, { type: 'SET_TEMP_FILTER_ENABLED', enabled: false });
+    expect(ids('all')).toEqual([4, 3, 2, 1]);
+    expect(ids('athletics')).toEqual([3, 1]);
+    s = run(s, { type: 'SET_TEMP_FILTER_ENABLED', enabled: true }, { type: 'CLEAR_TEMP_FILTER' });
+    expect(ids('all')).toEqual([4, 3, 2, 1]);
   });
 });

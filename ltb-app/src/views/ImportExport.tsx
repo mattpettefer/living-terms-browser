@@ -4,7 +4,7 @@ import { markSeedApplied } from '../services/seed';
 import { useStore } from '../state/provider';
 
 type Mode = 'export' | 'import';
-type Message = { kind: 'ok' | 'warn' | 'error'; text: string };
+type Message = { kind: 'ok' | 'error'; text: string };
 
 export function ImportExport() {
   const { state, dispatch } = useStore();
@@ -13,9 +13,9 @@ export function ImportExport() {
   const [replace, setReplace] = useState(true);
   const triggerRef = useRef<HTMLElement | null>(null);
 
-  // Empty filters carry no information; omit them (and the field entirely if none remain).
+  // Preserve each named filter and its saved operator, including empty filters.
   const exportableTempFilters = () => {
-    const filters = state.tempFilters.filter((f) => f.termKeys.length > 0);
+    const filters = state.tempFilters;
     if (filters.length === 0) return undefined;
     const activeId = filters.some((f) => f.id === state.activeTempFilterId) ? state.activeTempFilterId : filters[0]!.id;
     return { filters, activeId, enabled: state.tempFilterEnabled };
@@ -51,8 +51,7 @@ export function ImportExport() {
       const parts = [`Imported ${n} assignment${n === 1 ? '' : 's'}.`];
       if (result.tempFilters) parts.push(`${result.tempFilters.filters.length} temporary filter${result.tempFilters.filters.length === 1 ? '' : 's'} restored.`);
       if (result.unresolved.length) parts.push(`${result.unresolved.length} entr${result.unresolved.length === 1 ? 'y' : 'ies'} need review.`);
-      parts.push(...result.warnings);
-      setMessage({ kind: result.unresolved.length || result.warnings.length ? 'warn' : 'ok', text: parts.join(' ') });
+      setMessage({ kind: 'ok', text: parts.join(' ') });
       return true;
     } catch (e) {
       const detail = e instanceof SyntaxError ? `Invalid JSON (${e.message})` : e instanceof Error ? e.message : String(e);

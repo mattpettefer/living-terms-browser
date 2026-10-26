@@ -19,7 +19,7 @@ function loadSaved(sourceUrl: string): SavedConfig | undefined {
     const r = validateImport(doc, { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
     return { assignments: r.assignments, unresolved: r.unresolved };
   } catch (e) {
-    console.warn('[ltb] Could not restore saved configuration:', e);
+    console.error('[ltb] Could not restore saved configuration:', e);
     return undefined;
   }
 }
@@ -39,7 +39,6 @@ function applySeed(text: string | null, sourceUrl: string, hasSaved: boolean): (
   try {
     const r = validateImport(JSON.parse(unwrapShortcode(text)), { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
     markSeedApplied(sourceUrl, text);
-    for (const w of r.warnings) console.warn('[ltb] seed:', w);
     console.info(`[ltb] Imported ${Object.keys(r.assignments).length} assignments from page configuration.`);
     return { assignments: r.assignments, unresolved: r.unresolved, tempFilters: r.tempFilters };
   } catch (e) {

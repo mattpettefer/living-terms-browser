@@ -20,7 +20,6 @@ export interface ConfigDocument {
 export interface ImportResult {
   assignments: Assignments;
   unresolved: UnresolvedAssignment[];
-  warnings: string[];
   /** Present only when the document carried temp filters. */
   tempFilters: TempFilterSnapshot | null;
 }
@@ -78,7 +77,7 @@ export const localStorageAdapter: PersistenceAdapter = {
   },
 };
 
-/* Temporary filter: stored separately so it survives reloads without becoming part of the mapping export. */
+/* Temporary filters are saved separately from destination assignments and can also be exported. */
 export function tempFilterStorageKey(sourceUrl: string): string {
   return `ltb:tempfilter:${normalizeSourceUrl(sourceUrl)}`;
 }
@@ -103,6 +102,7 @@ export function parseTempFilters(parsed: unknown): TempFilterSnapshot | null {
       id: typeof f.id === 'string' && f.id ? f.id : `tf-import-${i}`,
       name: typeof f.name === 'string' && f.name.trim() ? f.name : `Filter ${i + 1}`,
       termKeys: cleanKeys(f.termKeys),
+      operator: f.operator === 'AND' ? 'AND' : 'OR',
     }));
   return { filters, activeId: typeof doc.activeId === 'string' ? doc.activeId : '', enabled: typeof doc.enabled === 'boolean' ? doc.enabled : true };
 }
@@ -151,14 +151,10 @@ export function validateImport(
 ): ImportResult {
   if (!input || typeof input !== 'object') throw new Error('Configuration must be a JSON object.');
   const doc = input as Partial<ConfigDocument> & { assignments?: unknown };
-  const warnings: string[] = [];
   const unresolved: UnresolvedAssignment[] = [];
 
   if (doc.schemaVersion !== undefined && Number(doc.schemaVersion) > CONFIG_SCHEMA_VERSION) {
     throw new Error(`Configuration schema version ${doc.schemaVersion} is newer than this app supports (${CONFIG_SCHEMA_VERSION}).`);
-  }
-  if (doc.sourceUrl && normalizeSourceUrl(String(doc.sourceUrl)) !== normalizeSourceUrl(ctx.sourceUrl)) {
-    warnings.push(`Configuration was exported from ${doc.sourceUrl}, but this app reads ${ctx.sourceUrl}. Term IDs may not correspond.`);
   }
   const entries = collectEntries(doc.assignments);
   if (!entries) throw new Error('Configuration is missing an "assignments" object or array.');
@@ -201,5 +197,5 @@ export function validateImport(
   }
   // Temp filters are optional extra information; a document without them leaves the current filters alone.
   const tempFilters = doc.tempFilters !== undefined ? parseTempFilters(doc.tempFilters) : null;
-  return { assignments, unresolved, warnings, tempFilters };
+  return { assignments, unresolved, tempFilters };
 }

@@ -27,7 +27,7 @@ export function useMediaBatch(posts: PostRecord[]) {
     fetchMediaBatch(state.source, ids, controller.signal)
       .then((media) => dispatch({ type: 'MEDIA_RESOLVED', media }))
       .catch((e) => {
-        if (!isAbortError(e)) console.warn('[ltb] media batch failed:', e);
+        if (!isAbortError(e)) console.error('[ltb] media batch failed:', e);
       })
       .finally(() => ids.forEach((id) => inflight.delete(id)));
     return () => controller.abort();

@@ -47,6 +47,16 @@ export function TempFilterSwitcher({ manage = false }: Props) {
                 {f.termKeys.length}
               </span>
             </button>
+            <button
+              type="button"
+              class="ltb-tf-operator"
+              aria-label={`${f.name}: require all terms (AND)`}
+              aria-pressed={f.operator === 'AND'}
+              title={`${f.operator === 'AND' ? 'AND: match every selected term. Switch to OR.' : 'OR: match any selected term. Switch to AND.'}`}
+              onClick={() => dispatch({ type: 'SET_TEMP_FILTER_OPERATOR', filterId: f.id, operator: f.operator === 'AND' ? 'OR' : 'AND' })}
+            >
+              {f.operator}
+            </button>
             {manage && (
               <button type="button" class="ltb-tf-remove ltb-tf-rename" aria-label={`Rename ${f.name}`} title="Rename filter" onClick={() => rename(f.id, f.name)}>
                 ✎

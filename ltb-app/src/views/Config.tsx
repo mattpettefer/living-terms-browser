@@ -146,7 +146,10 @@ export function Config() {
               </button>
             )}
           </h2>
-          {isTempTab && <TempFilterSwitcher manage />}
+          {isTempTab && <>
+            <TempFilterSwitcher manage />
+            <p class="ltb-muted">OR matches any selected term. AND requires every selected term. Changes are saved locally.</p>
+          </>}
           {!isTempTab && (
             <p class="ltb-muted">
               {isUnassignedTab

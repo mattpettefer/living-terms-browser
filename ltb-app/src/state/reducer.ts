@@ -4,6 +4,7 @@ import type {
   Assignments,
   ConfigTab,
   DestinationId,
+  FilterOperator,
   PostRecord,
   SourceTerm,
   TempFilter,
@@ -45,6 +46,7 @@ export type Action =
   | { type: 'CONFIRM_MOVE' }
   | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; tempFilters?: TempFilterSnapshot | null }
   | { type: 'TOGGLE_TEMP_FILTER_TERM'; termKey: TermKey; filterId?: string }
+  | { type: 'SET_TEMP_FILTER_OPERATOR'; filterId: string; operator: FilterOperator }
   | { type: 'CLEAR_TEMP_FILTER'; filterId?: string }
   | { type: 'ADD_TEMP_FILTER'; name?: string }
   | { type: 'REMOVE_TEMP_FILTER'; filterId: string }
@@ -60,12 +62,14 @@ export interface TempFilterSnapshot {
 }
 
 export function newTempFilter(name: string, termKeys: TermKey[] = []): TempFilter {
-  return { id: `tf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name, termKeys };
+  return { id: `tf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name, termKeys, operator: 'OR' };
 }
 
 /** Guarantee at least one filter and a valid active ID. */
 export function normalizeTempFilters(snapshot?: Partial<TempFilterSnapshot> | null): TempFilterSnapshot {
-  const filters = snapshot?.filters?.length ? snapshot.filters : [newTempFilter('Filter 1')];
+  const filters: TempFilter[] = snapshot?.filters?.length
+    ? snapshot.filters.map((f) => ({ ...f, operator: f.operator === 'AND' ? 'AND' : 'OR' }))
+    : [newTempFilter('Filter 1')];
   const activeId = filters.some((f) => f.id === snapshot?.activeId) ? snapshot!.activeId! : filters[0]!.id;
   return { filters, activeId, enabled: snapshot?.enabled ?? true };
 }
@@ -332,6 +336,12 @@ export function reducer(state: AppState, action: Action): AppState {
         termKeys: f.termKeys.includes(action.termKey) ? f.termKeys.filter((k) => k !== action.termKey) : [...f.termKeys, action.termKey],
       }));
       return next === state || id !== state.activeTempFilterId || state.tempFilterEnabled ? next : { ...next, tempFilterEnabled: true };
+    }
+    case 'SET_TEMP_FILTER_OPERATOR': {
+      const next = updateTempFilter(state, action.filterId, (f) => f.operator === action.operator ? f : { ...f, operator: action.operator });
+      return next === state || action.filterId !== state.activeTempFilterId || !state.tempFilterEnabled
+        ? next
+        : { ...next, ui: { ...next.ui, overviewPage: 1, overviewScrollY: 0 } };
     }
     case 'CLEAR_TEMP_FILTER':
       return updateTempFilter(state, action.filterId ?? state.activeTempFilterId, (f) => (f.termKeys.length ? { ...f, termKeys: [] } : f));

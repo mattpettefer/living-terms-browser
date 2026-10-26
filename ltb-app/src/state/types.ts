@@ -19,7 +19,10 @@ export interface Destination {
 
 export type TermSort = 'alpha' | 'selected-first';
 
+export type FilterOperator = 'OR' | 'AND';
+
 export interface TempFilter {
+  operator: FilterOperator;
   id: string;
   name: string;
   termKeys: TermKey[];
@@ -94,9 +97,9 @@ export interface AppState {
   mappingRevision: number;
   /**
    * Temporary secondary filters. The active one, when non-empty, narrows every
-   * Overview list to posts that also carry at least one of its terms.
-   * Independent of assignments and not part of the exported mapping
-   * configuration. There is always at least one filter.
+   * Overview list using its operator (OR = any term, AND = every term).
+   * Independent of destination assignments; saved locally and included in
+   * configuration exports. There is always at least one filter.
    */
   tempFilters: TempFilter[];
   activeTempFilterId: string;

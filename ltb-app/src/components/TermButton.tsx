@@ -5,8 +5,6 @@ export interface TermButtonProps {
   term: SourceTerm;
   /** Highlighted as owned by the current context (Config tab). */
   selected?: boolean;
-  /** Flagged red because it contributes to a multi-destination overlap on an article. */
-  warning?: boolean;
   /** Destination that owns this term; drives the color coding. */
   owner?: DestinationId | null;
   /** 'filter' renders the selected state in the neutral temporary-filter style instead of a destination color. */
@@ -23,11 +21,11 @@ export interface TermButtonProps {
  * Uniform rounded control for a source term. Categories and tags look
  * identical; taxonomy is only exposed in the disambiguation detail.
  */
-export function TermButton({ term, selected = false, warning = false, owner = null, tone = 'destination', tooltip, detail, disabled, onClick }: TermButtonProps) {
+export function TermButton({ term, selected = false, owner = null, tone = 'destination', tooltip, detail, disabled, onClick }: TermButtonProps) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
   const hasTip = !!tooltip || !!detail;
-  const cls = ['ltb-term', tone === 'filter' && 'is-filter', selected && 'is-selected', owner && 'is-owned', warning && 'is-warning', open && hasTip && 'is-open']
+  const cls = ['ltb-term', tone === 'filter' && 'is-filter', selected && 'is-selected', owner && 'is-owned', open && hasTip && 'is-open']
     .filter(Boolean)
     .join(' ');
 
@@ -50,11 +48,6 @@ export function TermButton({ term, selected = false, warning = false, owner = nu
         onBlur={() => setOpen(false)}
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
       >
-        {warning && (
-          <span class="ltb-term-warning-icon" role="img" aria-label="Overlap warning">
-            !
-          </span>
-        )}
         <span class="ltb-term-label">{term.name}</span>
       </button>
       {hasTip && (

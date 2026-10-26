@@ -1,5 +1,5 @@
 import { destinationName } from './destinations';
-import type { AppState, Assignments, DestinationId, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
+import type { AppState, Assignments, DestinationId, FilterOperator, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
 
 export function getAssignedTerms(state: AppState, destinationId: DestinationId): SourceTerm[] {
   const out: SourceTerm[] = [];
@@ -29,35 +29,6 @@ export function getPostMatches(post: PostRecord, assignments: Assignments, exclu
 
 export function getMatchedDestinations(matches: PostMatches): DestinationId[] {
   return Object.keys(matches) as DestinationId[];
-}
-
-export function getPostOverlap(post: PostRecord, assignments: Assignments, excluded: ReadonlySet<TermKey>): boolean {
-  return getMatchedDestinations(getPostMatches(post, assignments, excluded)).length > 1;
-}
-
-export interface TermWarning {
-  destination: DestinationId;
-  otherDestinations: DestinationId[];
-  otherTermKeys: TermKey[];
-  explanation: string;
-}
-
-/** Why a specific term on a specific post is flagged red. Null when it isn't. */
-export function getTermWarning(
-  post: PostRecord,
-  termKey: TermKey,
-  assignments: Assignments,
-  excluded: ReadonlySet<TermKey>,
-): TermWarning | null {
-  if (excluded.has(termKey)) return null;
-  const destination = assignments[termKey];
-  if (!destination) return null;
-  const matches = getPostMatches(post, assignments, excluded);
-  const otherDestinations = getMatchedDestinations(matches).filter((d) => d !== destination);
-  if (otherDestinations.length === 0) return null;
-  const otherTermKeys = otherDestinations.flatMap((d) => matches[d] ?? []);
-  const explanation = `Assigned to ${destinationName(destination)}. This article also matches ${joinNames(otherDestinations)}.`;
-  return { destination, otherDestinations, otherTermKeys, explanation };
 }
 
 export function joinNames(ids: DestinationId[]): string {
@@ -96,15 +67,14 @@ export function sortSelectedFirst(terms: SourceTerm[], isSelected: (term: Source
 }
 
 /**
- * Client-side secondary filter: a set of AND requirements. A post passes only
- * if it carries EVERY term in the filter, so each added term narrows the
- * result. No-op when the filter is empty.
+ * Client-side secondary filter: OR matches any selected term; AND requires
+ * every selected term. An empty filter leaves the primary results unchanged.
  */
-export function applyTempFilter(posts: PostRecord[], tempFilterTermKeys: readonly TermKey[]): PostRecord[] {
+export function applyTempFilter(posts: PostRecord[], tempFilterTermKeys: readonly TermKey[], operator: FilterOperator = 'OR'): PostRecord[] {
   if (tempFilterTermKeys.length === 0) return posts;
   return posts.filter((p) => {
     const have = new Set(p.termKeys);
-    return tempFilterTermKeys.every((k) => have.has(k));
+    return operator === 'AND' ? tempFilterTermKeys.every((k) => have.has(k)) : tempFilterTermKeys.some((k) => have.has(k));
   });
 }
 
@@ -132,7 +102,7 @@ export interface OverviewResults {
 /**
  * Overview lists are computed from the complete local index: a post matches a
  * destination when any of its attached, non-excluded terms is assigned there
- * (rule 3); then the active temporary filter narrows further (post must carry all of its terms). Posts are unique
+ * (rule 3); then the active temporary filter applies its own OR/AND operator. Posts are unique
  * by construction, so a post with several matching terms appears once.
  */
 export function getOverviewResults(state: AppState, category: DestinationId | 'all'): OverviewResults {
@@ -145,8 +115,9 @@ export function getOverviewResults(state: AppState, category: DestinationId | 'a
     if (!p) continue;
     if (category === 'all' || p.termKeys.some((k) => !excluded.has(k) && state.assignments[k] === category)) primary.push(p);
   }
-  const tempKeys = state.tempFilterEnabled ? getActiveTempFilter(state).termKeys : [];
-  return { matching: applyTempFilter(primary, tempKeys), primaryCount: primary.length, emptyAssignment };
+  const activeFilter = getActiveTempFilter(state);
+  const tempKeys = state.tempFilterEnabled ? activeFilter.termKeys : [];
+  return { matching: applyTempFilter(primary, tempKeys, activeFilter.operator), primaryCount: primary.length, emptyAssignment };
 }
 
 export function getDuplicateNameCounts(state: AppState): Map<string, number> {

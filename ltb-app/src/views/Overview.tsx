@@ -90,12 +90,12 @@ export function Overview() {
         <div class="ltb-temp-bar" role="region" aria-label="Temporary filter">
           <TempFilterSwitcher />
           {state.tempFilterEnabled && (
-            <span class="ltb-temp-label">{tempActive ? 'Posts must also have' : `${activeFilter.name} has no requirements`}</span>
+            <span class="ltb-temp-label">{tempActive ? (activeFilter.operator === 'AND' ? 'Match all of these terms:' : 'Match any of these terms:') : `${activeFilter.name} has no requirements`}</span>
           )}
           <div class="ltb-temp-terms">
             {state.tempFilterEnabled && tempTerms.map(({ key, term }, i) => (
               <span key={key} class="ltb-temp-term-wrap">
-                {i > 0 && <span class="ltb-temp-and">and</span>}
+                {i > 0 && <span class="ltb-temp-operator">{activeFilter.operator.toLowerCase()}</span>}
                 <button
                   type="button"
                   class="ltb-term ltb-term-sm is-filter is-selected"
@@ -143,7 +143,7 @@ export function Overview() {
       ) : index.status === 'loading' && state.postOrder.length === 0 ? (
         <LoadingState label="Loading posts…" />
       ) : matching.length === 0 && index.complete ? (
-        <EmptyState title={tempActive ? `No posts in this category carry every term required by ${activeFilter.name}.` : 'No published posts match the assigned terms.'} />
+        <EmptyState title={tempActive ? `No posts in this category match ${activeFilter.operator === 'AND' ? 'all' : 'any'} of the terms in ${activeFilter.name}.` : 'No published posts match the assigned terms.'} />
       ) : (
         <>
           <div class="ltb-grid">
