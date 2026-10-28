@@ -46,7 +46,7 @@ export function getExcludedSet(state: AppState): ReadonlySet<TermKey> {
 }
 
 /** Combined eligible inventory for Config, alphabetical, filtered by search and optionally to source categories. */
-export function getVisibleTerms(state: AppState, search: string, categoriesOnly = false): SourceTerm[] {
+export function getVisibleTerms(state: AppState, search: string, categoriesOnly = false, minPostCount = 0): SourceTerm[] {
   const excluded = getExcludedSet(state);
   const q = search.trim().toLowerCase();
   const out: SourceTerm[] = [];
@@ -55,6 +55,8 @@ export function getVisibleTerms(state: AppState, search: string, categoriesOnly 
     const t = state.termsByKey[key];
     if (!t) continue;
     if (categoriesOnly && t.taxonomy !== 'category') continue;
+    // Do not hide a term with an unknown count while its inventory is still loading.
+    if (t.sourceCount != null && t.sourceCount < minPostCount) continue;
     if (q && !t.name.toLowerCase().includes(q) && !t.slug.includes(q)) continue;
     out.push(t);
   }

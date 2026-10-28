@@ -1,15 +1,17 @@
+import { TermPostCount, postCountLabel } from './TermPostCount';
 import { useStore } from '../state/provider';
 import type { DestinationId, TermKey } from '../state/types';
 import { getAssignedTermKeys, getActiveTempFilter } from '../state/selectors';
 
 interface Props {
   destination?: DestinationId;
+  showPostCounts?: boolean;
   editing?: 'match' | 'not';
   onEdit?: (line: 'match' | 'not') => void;
 }
 
 /** The positive match and negative exclusion rules for the active named filter. */
-export function TempFilterLines({ editing, onEdit, destination }: Props) {
+export function TempFilterLines({ editing, onEdit, destination, showPostCounts = false }: Props) {
   const { state, dispatch } = useStore();
   const filter = getActiveTempFilter(state);
   const rows = [
@@ -33,13 +35,16 @@ export function TempFilterLines({ editing, onEdit, destination }: Props) {
           <div class="ltb-filter-line-terms">
             {row.keys.length === 0 && <span class="ltb-muted">{row.empty}{editing === row.id ? ' — choose terms below' : ''}</span>}
             {row.keys.map((key) => {
-              const name = state.termsByKey[key]?.name ?? key;
+              const term = state.termsByKey[key];
+              const name = term?.name ?? key;
               return (
                 <button key={key} type="button" class="ltb-term ltb-term-sm is-filter is-selected"
-                  aria-label={'Remove ' + name + ' from ' + (row.id === 'not' ? 'NOT' : 'matching terms')}
+                  aria-label={'Remove ' + name + ' from ' + (row.id === 'not' ? 'NOT' : 'matching terms') + (showPostCounts ? ', ' + postCountLabel(term?.sourceCount) : '')}
                   title={'Remove ' + name + ' from ' + row.label}
                   onClick={() => remove(row.id, key)}>
-                  <span class="ltb-term-label">{name}</span><span class="ltb-term-x" aria-hidden="true">×</span>
+                  <span class="ltb-term-label">{name}</span>
+                  {showPostCounts && <TermPostCount count={term?.sourceCount} />}
+                  <span class="ltb-term-x" aria-hidden="true">×</span>
                 </button>
               );
             })}

@@ -38,7 +38,8 @@ export interface SourceTerm {
   taxonomy: Taxonomy;
   name: string;
   slug: string;
-  sourceCount: number;
+  /** Source post total; null until an API response supplies the count. */
+  sourceCount: number | null;
 }
 
 export interface PostRecord {
@@ -136,6 +137,7 @@ export interface AppState {
     activeConfigCategory: ConfigTab;
     termSearch: string;
     categoriesOnly: boolean;
+    minTermPostCount: number;
     termSort: TermSort;
     selectedPostId: number | null;
     pendingTermMove: PendingTermMove | null;

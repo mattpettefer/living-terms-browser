@@ -93,7 +93,7 @@ it('Config lets the user edit the NOT row, add a term, and remove it from the ro
   expect(getActiveTempFilter(store.state).notTermKeys).toEqual(['category:1']);
   expect(getActiveTempFilter(store.state).termKeys).toEqual([]);
   expect(host!.querySelector('.ltb-filter-line.is-not')?.textContent).toContain('Faces of LIFE');
-  act(() => host!.querySelector<HTMLButtonElement>('[aria-label="Remove Faces of LIFE from NOT"]')!.click());
+  act(() => host!.querySelector<HTMLButtonElement>('[aria-label="Remove Faces of LIFE from NOT, 20 source posts"]')!.click());
   expect(getActiveTempFilter(store.state).notTermKeys).toEqual([]);
 });
 

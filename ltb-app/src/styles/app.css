@@ -237,6 +237,18 @@
 .ltb-term.is-selected,
 .ltb-term.is-selected:hover { background: var(--dest, var(--ltb-accent)); border-color: var(--dest, var(--ltb-accent)); color: #fff; font-weight: 600; }
 .ltb-term-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ltb-term-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 0.8em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ltb-term.is-selected .ltb-term-count { background: rgb(255 255 255 / 20%); }
 .ltb-tooltip {
   position: absolute;
   z-index: 20;
@@ -346,6 +358,22 @@
   border: 1px solid var(--ltb-border);
   font: inherit;
 }
+.ltb-min-posts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.9rem; }
+.ltb-min-posts label { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ltb-min-posts input[type="number"] { width: 64px; padding: 8px; border: 1px solid var(--ltb-border); border-radius: 8px; background: var(--ltb-bg); color: inherit; font: inherit; }
+.ltb-min-posts input[type="range"] { width: 120px; accent-color: var(--ltb-accent); }
+.ltb-excluded-posts { margin-top: 24px; padding: 16px; border: 1px solid var(--ltb-border); border-radius: var(--ltb-radius); background: var(--ltb-surface); }
+.ltb-excluded-results { margin-top: 16px; }
+.ltb-excluded-result { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.ltb-excluded-result > .ltb-card { flex: 1; }
+.ltb-excluded-post-terms { padding: 12px; border: 1px solid var(--ltb-border); border-radius: 8px; font-size: 0.82rem; }
+.ltb-excluded-post-terms > div + div { margin-top: 8px; }
+.ltb-excluded-post-terms ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.ltb-excluded-post-terms li { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border-radius: 8px; background: var(--ltb-bg); overflow-wrap: anywhere; }
+.ltb-min-matches { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.9rem; }
+.ltb-min-matches input { width: 160px; accent-color: var(--ltb-accent); }
+.ltb-excluded-posts-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+.ltb-excluded-posts p { margin: 6px 0; }
 .ltb-import-export {
   margin-top: 32px;
   padding: 16px;

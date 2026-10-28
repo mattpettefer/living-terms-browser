@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeTerm } from '../services/normalize';
 import { createInitialState, newTempFilter, normalizeTempFilters, reducer, type Action } from './reducer';
 import { applyTempFilter, getActiveTempFilter, getOverviewResults, getPostMatches, getVisibleTerms, sortSelectedFirst } from './selectors';
 import type { AppState, PostRecord, SourceTerm } from './types';
@@ -44,6 +45,30 @@ function withInventory(): AppState {
     { type: 'TERMS_LOAD_COMPLETE', requestId: 'r1', excludedTermKeys: ['category:30'] },
   );
 }
+
+describe('source post counts', () => {
+  it.each(['category', 'post_tag'] as const)('preserves %s inventory counts when article terms omit them, but accepts a real zero', (taxonomy) => {
+    const raw = { id: 10, name: 'Example', slug: 'example' };
+    const key = `${taxonomy}:10` as const;
+    let state = run(createInitialState(source),
+      { type: 'TERMS_LOAD_START', requestId: 'counts' },
+      { type: 'TERMS_PAGE_LOADED', requestId: 'counts', terms: [normalizeTerm({ ...raw, count: 27 }, taxonomy)], loadedPages: 1, totalPages: 1 },
+      { type: 'TERMS_RESOLVED', terms: [normalizeTerm(raw, taxonomy)] });
+    expect(state.termsByKey[key]?.sourceCount).toBe(27);
+    state = run(state, { type: 'TERMS_PAGE_LOADED', requestId: 'counts', terms: [normalizeTerm({ ...raw, count: 0 }, taxonomy)], loadedPages: 1, totalPages: 1 });
+    expect(state.termsByKey[key]?.sourceCount).toBe(0);
+  });
+
+  it('keeps an unknown count distinct from zero until the inventory arrives', () => {
+    const raw = { id: 10, name: 'Example', slug: 'example' };
+    let state = run(createInitialState(source), { type: 'TERMS_RESOLVED', terms: [normalizeTerm(raw, 'category')] });
+    expect(state.termsByKey['category:10']?.sourceCount).toBeNull();
+    state = run(state,
+      { type: 'TERMS_LOAD_START', requestId: 'counts' },
+      { type: 'TERMS_PAGE_LOADED', requestId: 'counts', terms: [normalizeTerm({ ...raw, count: 27 }, 'category')], loadedPages: 1, totalPages: 1 });
+    expect(state.termsByKey['category:10']?.sourceCount).toBe(27);
+  });
+});
 
 describe('assignment transitions', () => {
   it('assigns an unassigned term immediately and bumps revision', () => {

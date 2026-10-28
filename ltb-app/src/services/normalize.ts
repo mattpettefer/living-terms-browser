@@ -47,7 +47,7 @@ export function normalizeTerm(raw: WpTerm, taxonomy: Taxonomy): SourceTerm {
     taxonomy,
     name: decodeEntities(raw.name),
     slug: raw.slug,
-    sourceCount: raw.count ?? 0,
+    sourceCount: raw.count ?? null,
   };
 }
 

@@ -1,4 +1,5 @@
 import { useId, useState } from 'preact/hooks';
+import { TermPostCount } from './TermPostCount';
 import type { DestinationId, SourceTerm } from '../state/types';
 
 export interface TermButtonProps {
@@ -13,6 +14,7 @@ export interface TermButtonProps {
   tooltip?: string | null;
   /** Secondary detail, e.g. source ID for duplicate labels. */
   detail?: string | null;
+  showPostCount?: boolean;
   disabled?: boolean;
   onClick?: (term: SourceTerm) => void;
 }
@@ -21,7 +23,7 @@ export interface TermButtonProps {
  * Uniform rounded control for a source term. Categories and tags look
  * identical; taxonomy is only exposed in the disambiguation detail.
  */
-export function TermButton({ term, selected = false, owner = null, tone = 'destination', tooltip, detail, disabled, onClick }: TermButtonProps) {
+export function TermButton({ term, selected = false, owner = null, tone = 'destination', tooltip, detail, showPostCount = false, disabled, onClick }: TermButtonProps) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
   const hasTip = !!tooltip || !!detail;
@@ -49,6 +51,7 @@ export function TermButton({ term, selected = false, owner = null, tone = 'desti
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
       >
         <span class="ltb-term-label">{term.name}</span>
+        {showPostCount && <TermPostCount count={term.sourceCount} />}
       </button>
       {hasTip && (
         <span id={tipId} role="tooltip" class="ltb-tooltip" hidden={!open}>

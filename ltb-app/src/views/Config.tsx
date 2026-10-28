@@ -12,6 +12,7 @@ import { TempFilterLines } from '../components/TempFilterLines';
 import { TempFilterSwitcher } from '../components/TempFilterSwitcher';
 import type { ConfigTab, DestinationId, SourceTerm } from '../state/types';
 import { ImportExport } from './ImportExport';
+import { ExcludedPostsCount } from '../components/ExcludedPostsCount';
 
 const CHUNK = 200;
 const UNASSIGNED = 'unassigned' as const;
@@ -30,13 +31,20 @@ export function Config() {
   const destinationNotSet = useMemo(() => new Set(activeDestination ? state.destinationExclusions[activeDestination] ?? [] : []), [state.destinationExclusions, activeDestination]);
   const search = state.ui.termSearch;
   const categoriesOnly = state.ui.categoriesOnly;
+  const minPostCount = state.ui.minTermPostCount;
+  const onMinPostCountInput = (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const count = Number.isFinite(input.valueAsNumber) ? Math.max(0, Math.min(20, Math.trunc(input.valueAsNumber))) : 0;
+    input.value = String(count);
+    dispatch({ type: 'SET_MIN_TERM_POST_COUNT', count });
+  };
   const inventory = state.termsInventory;
   const counts = getAssignmentCounts(state);
   const duplicates = useMemo(() => getDuplicateNameCounts(state), [state.termOrder, state.termsByKey]);
   const termSort = state.ui.termSort;
   const alphabetical = useMemo(
-    () => getVisibleTerms(state, search, categoriesOnly),
-    [state.termOrder, state.termsByKey, state.excludedTermKeys, search, categoriesOnly],
+    () => getVisibleTerms(state, search, categoriesOnly, minPostCount),
+    [state.termOrder, state.termsByKey, state.excludedTermKeys, search, categoriesOnly, minPostCount],
   );
   const visible = useMemo(() => {
     if (isUnassignedTab) return alphabetical.filter((t) => !state.assignments[t.key]);
@@ -52,7 +60,7 @@ export function Config() {
   // Incremental rendering: grow the rendered window as the user scrolls near the end.
   const [limit, setLimit] = useState(CHUNK);
   const sentinel = useRef<HTMLDivElement>(null);
-  useEffect(() => setLimit(CHUNK), [search, active, categoriesOnly, termSort, filterLine, activeFilter.id]);
+  useEffect(() => setLimit(CHUNK), [search, active, categoriesOnly, minPostCount, termSort, filterLine, activeFilter.id]);
   useEffect(() => {
     const el = sentinel.current;
     if (!el || limit >= visible.length) return;
@@ -155,10 +163,10 @@ export function Config() {
           </h2>
           {isTempTab && <>
             <TempFilterSwitcher manage />
-            <TempFilterLines editing={filterLine} onEdit={setFilterLine} />
+            <TempFilterLines showPostCounts editing={filterLine} onEdit={setFilterLine} />
             <p class="ltb-muted">Choose a row, then click terms below to add or remove them. NOT excludes posts containing any of its terms. Changes are saved locally.</p>
           </>}
-          {activeDestination && <TempFilterLines destination={activeDestination} editing={filterLine} onEdit={setFilterLine} />}
+          {activeDestination && <TempFilterLines showPostCounts destination={activeDestination} editing={filterLine} onEdit={setFilterLine} />}
           {!isTempTab && (
             <p class="ltb-muted">
               {isUnassignedTab
@@ -198,19 +206,36 @@ export function Config() {
               Selected first
             </label>
           )}
+          <div class="ltb-min-posts" role="group" aria-label="Minimum source post count" title="Hide categories and tags used by fewer posts. 0 shows all counts.">
+            <label>
+              Minimum posts
+              <input type="number" min="0" max="20" step="1" value={minPostCount} onInput={onMinPostCountInput} />
+            </label>
+            <input type="range" aria-label="Minimum posts slider" min="0" max="20" step="1" value={minPostCount}
+              aria-valuetext={minPostCount === 0 ? '0 — show all counts' : minPostCount + ' posts or more'} onInput={onMinPostCountInput} />
+          </div>
+          {isTempTab && (
+            <button type="button" class="ltb-btn"
+              disabled={!inventory.complete || inventory.status !== 'success' || visible.length === 0}
+              title={`Add all ${visible.length.toLocaleString()} displayed terms to ${activeFilter.name}’s ${filterLine === 'not' ? 'NOT' : 'MATCH'} row, including terms beyond Show more.`}
+              onClick={() => dispatch({ type: 'SELECT_TEMP_FILTER_TERMS', line: filterLine, termKeys: visible.map((term) => term.key) })}>
+              Select all shown
+            </button>
+          )}
           <span class="ltb-muted" role="status" aria-live="polite">
             {inventory.status === 'loading' && `Loading terms (${progress})… `}
             {visible.length.toLocaleString()} {isUnassignedTab ? 'unassigned ' : ''}term{visible.length === 1 ? '' : 's'}
             {isTempTab && ` · ${(activeFilter.termKeys.length + (activeFilter.notTermKeys?.length ?? 0))} in ${activeFilter.name}`}
             {search && ' match'}
             {categoriesOnly && ' (source categories only)'}
+            {minPostCount > 0 && ` · at least ${minPostCount} posts`}
             {!inventory.complete && inventory.status !== 'error' && ' so far'}
           </span>
         </div>
 
         {inventory.status === 'error' && <ErrorState message={`Could not load the term inventory: ${inventory.error}`} onRetry={retry} />}
         {inventory.status === 'loading' && visible.length === 0 && <LoadingState label="Loading terms…" />}
-        {isUnassignedTab && inventory.complete && visible.length === 0 && <p class="ltb-muted">Every eligible term is assigned.</p>}
+        {inventory.complete && visible.length === 0 && <p class="ltb-muted">{isUnassignedTab && unassignedCount === 0 ? 'Every eligible term is assigned.' : 'No terms match the current display filters.'}</p>}
 
         <div class="ltb-term-list">
           {visible.slice(0, limit).map((t) => {
@@ -222,6 +247,7 @@ export function Config() {
               <TermButton
                 key={t.key}
                 term={t}
+                showPostCount
                 selected={isTempTab ? inTemp : !isUnassignedTab && filterLine === 'not' ? destinationNotSet.has(t.key) : owner === active}
                 owner={isTempTab && inTemp ? null : activeDestination && filterLine === 'not' && destinationNotSet.has(t.key) ? activeDestination : (owner ?? null)}
                 tone={isTempTab ? 'filter' : 'destination'}
@@ -241,6 +267,7 @@ export function Config() {
         )}
       </div>
 
+      <ExcludedPostsCount />
       <ImportExport />
 
       {pending && (

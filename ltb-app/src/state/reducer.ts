@@ -29,6 +29,7 @@ export type Action =
   | { type: 'SET_OVERVIEW_SCROLL'; scrollY: number }
   | { type: 'SET_CONFIG_CATEGORY'; category: ConfigTab }
   | { type: 'SET_TERM_SEARCH'; search: string }
+  | { type: 'SET_MIN_TERM_POST_COUNT'; count: number }
   | { type: 'SET_CATEGORIES_ONLY'; categoriesOnly: boolean }
   | { type: 'SET_TERM_SORT'; termSort: TermSort }
   | { type: 'TERMS_LOAD_START'; requestId: string }
@@ -56,6 +57,7 @@ export type Action =
   | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null; tempFilters?: TempFilterSnapshot | null }
   | { type: 'TOGGLE_TEMP_FILTER_NOT_TERM'; termKey: TermKey; filterId?: string }
   | { type: 'TOGGLE_TEMP_FILTER_TERM'; termKey: TermKey; filterId?: string }
+  | { type: 'SELECT_TEMP_FILTER_TERMS'; termKeys: TermKey[]; line: 'match' | 'not' }
   | { type: 'SET_TEMP_FILTER_OPERATOR'; filterId: string; operator: FilterOperator }
   | { type: 'CLEAR_TEMP_FILTER'; filterId?: string }
   | { type: 'ADD_TEMP_FILTER'; name?: string }
@@ -124,6 +126,7 @@ export function createInitialState(
       activeConfigCategory: 'campus-life',
       termSearch: '',
       categoriesOnly: true,
+      minTermPostCount: 0,
       termSort: 'selected-first',
       selectedPostId: null,
       pendingTermMove: null,
@@ -169,7 +172,8 @@ function mergeTerms(state: AppState, terms: SourceTerm[]): Pick<AppState, 'terms
   let added = false;
   for (const t of terms) {
     if (!termsByKey[t.key]) added = true;
-    termsByKey[t.key] = t;
+    // Embedded article terms may omit count; retain the inventory total.
+    termsByKey[t.key] = { ...t, sourceCount: t.sourceCount ?? termsByKey[t.key]?.sourceCount ?? null };
   }
   if (!added) return { termsByKey, termOrder: state.termOrder };
   const termOrder = (Object.keys(termsByKey) as TermKey[]).sort((a, b) => {
@@ -265,6 +269,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, ui: { ...state.ui, termSearch: action.search } };
     case 'SET_CATEGORIES_ONLY':
       return { ...state, ui: { ...state.ui, categoriesOnly: action.categoriesOnly } };
+    case 'SET_MIN_TERM_POST_COUNT':
+      return { ...state, ui: { ...state.ui, minTermPostCount: Number.isFinite(action.count) ? Math.max(0, Math.min(20, Math.trunc(action.count))) : 0 } };
     case 'SET_TERM_SORT':
       return { ...state, ui: { ...state.ui, termSort: action.termSort } };
 
@@ -427,6 +433,23 @@ export function reducer(state: AppState, action: Action): AppState {
           : [...(f.notTermKeys ?? []), action.termKey],
       }));
       return next === state || id !== state.activeTempFilterId || state.tempFilterEnabled ? next : { ...next, tempFilterEnabled: true };
+    }
+    case 'SELECT_TEMP_FILTER_TERMS': {
+      const excluded = new Set(state.excludedTermKeys);
+      const keys = [...new Set(action.termKeys)].filter((key) => state.termsByKey[key] && !excluded.has(key));
+      if (!keys.length) return state;
+      const selected = new Set(keys);
+      const next = updateTempFilter(state, state.activeTempFilterId, (filter) => {
+        const existing = action.line === 'match' ? filter.termKeys : filter.notTermKeys ?? [];
+        const other = action.line === 'match' ? filter.notTermKeys ?? [] : filter.termKeys;
+        const combined = [...new Set([...existing, ...keys])];
+        const remaining = other.filter((key) => !selected.has(key));
+        if (combined.length === existing.length && remaining.length === other.length) return filter;
+        return action.line === 'match'
+          ? { ...filter, termKeys: combined, notTermKeys: remaining }
+          : { ...filter, notTermKeys: combined, termKeys: remaining };
+      });
+      return next.tempFilterEnabled ? next : { ...next, tempFilterEnabled: true };
     }
     case 'SET_TEMP_FILTER_OPERATOR': {
       const next = updateTempFilter(state, action.filterId, (f) => f.operator === action.operator ? f : { ...f, operator: action.operator });

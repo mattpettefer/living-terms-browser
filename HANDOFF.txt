@@ -1,0 +1,28 @@
+Living Terms Browser handoff
+Updated October 28, 2026
+
+Repository: C:\Users\mattp\dev\mcpdev\living-terms-browser
+Branch: main
+App: ltb-app (Preact, TypeScript, Vite)
+Generated WordPress assets: ltb-plugin/assets
+Config URL: http://localhost:5173/#/config/temp-filter
+
+Completed changes
+- Category and tag buttons in Config show their source post counts, including selected MATCH/NOT chips. Unknown counts display a dash and do not overwrite known counts.
+- Config has a Minimum posts field and slider (0-20). This filters the displayed term inventory alongside search and Categories only.
+- Select all shown adds all matching inventory terms, including those beyond the first rendered page, to the active temporary filter's currently edited MATCH or NOT row. Existing selections are preserved; added terms are removed from the opposite row.
+- Excluded Posts calculates on demand and displays the resulting post cards with categories, tags, and counts. Cards and images load only after calculation; results paginate.
+- Minimum matching terms slider (1-20) controls the excluded-post requirement.
+
+Critical behavior confirmed by the user
+The current filter for Excluded Posts means the active named temporary filter's selected MATCH terms. Count distinct matching categories and tags together. At 3, show posts matching 0, 1, or 2 selected MATCH terms. NOT terms and the AND/OR operator do not affect this diagnostic. With no MATCH terms selected, every source post is excluded.
+
+Config search, Categories only, and Minimum posts control the displayed inventory and Select all shown. They do not directly change the excluded-post calculation. Changing the active filter, its MATCH terms, the matching requirement, or the post index invalidates calculated results and requires another click.
+
+Earlier committed features include saved named temporary filters in the secondary filter bar, OR by default with a saved AND option, import/export support, NOT filters, and removal of warning functionality. Do not confuse temporary filters with destination assignment rules or Config display filtering.
+
+Validation
+Latest source validation: npm test passed 98 tests across 13 files; npm run build passed; git diff --check passed. Built plugin assets are included in this commit.
+Run commands from ltb-app: npm test; npm run build; npm run dev -- --host 127.0.0.1.
+
+No implementation task remains pending. Continue from the user's next request. This handoff accompanies a local Git commit; no remote push was requested.

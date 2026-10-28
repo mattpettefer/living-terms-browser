@@ -132,5 +132,5 @@ function labelFor(x: { key: TermKey; term: SourceTerm | undefined }): string {
 
 function placeholderTerm(key: TermKey): SourceTerm {
   const parsed = parseTermKey(key);
-  return { key, id: parsed?.id ?? 0, taxonomy: parsed?.taxonomy ?? 'category', name: key, slug: '', sourceCount: 0 };
+  return { key, id: parsed?.id ?? 0, taxonomy: parsed?.taxonomy ?? 'category', name: key, slug: '', sourceCount: null };
 }
