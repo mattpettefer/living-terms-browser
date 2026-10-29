@@ -1,3 +1,4 @@
+import { combineMergers } from '../state/mergers';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { buildConfigDocument, unwrapShortcode, validateImport, wrapAsShortcode } from '../services/persistence';
 import { markSeedApplied } from '../services/seed';
@@ -26,6 +27,8 @@ export function ImportExport() {
       JSON.stringify(
         buildConfigDocument({
           sourceUrl: state.source.baseUrl,
+          mergers: state.mergers,
+          finalTerms: state.finalTerms,
           assignments: state.assignments,
           destinationExclusions: state.destinationExclusions,
           postSelections: state.postSelections,
@@ -48,9 +51,12 @@ export function ImportExport() {
         excludedTermKeys: new Set(state.excludedTermKeys),
         knownTermKeys: state.termsInventory.complete ? new Set(Object.keys(state.termsByKey) as never[]) : null,
       });
-      dispatch({ type: 'IMPORT_CONFIG', assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, postSelections: result.postSelections, destinationExclusions: result.destinationExclusions, tempFilters: result.tempFilters });
+      if (!replaceExisting && result.mergers) combineMergers(state.mergers, result.mergers);
+      dispatch({ type: 'IMPORT_CONFIG', finalTerms: result.finalTerms, mergers: result.mergers, assignments: result.assignments, unresolved: result.unresolved, replace: replaceExisting, postSelections: result.postSelections, destinationExclusions: result.destinationExclusions, tempFilters: result.tempFilters });
       const n = Object.keys(result.assignments).length;
       const parts = [`Imported ${n} assignment${n === 1 ? '' : 's'}.`];
+      if (result.finalTerms) parts.push('Final allowed tags restored.');
+      if (result.mergers) parts.push(result.mergers.length + ' mergers restored.');
       if (result.postSelections) parts.push(Object.keys(result.postSelections).length + ' post selections restored.');
       if (result.tempFilters) parts.push(`${result.tempFilters.filters.length} temporary filter${result.tempFilters.filters.length === 1 ? '' : 's'} restored.`);
       if (result.unresolved.length) parts.push(`${result.unresolved.length} entr${result.unresolved.length === 1 ? 'y' : 'ies'} need review.`);
@@ -193,7 +199,7 @@ function ExportDialog({ json, onClose }: { json: string; onClose: () => void }) 
         <h2 id="ltb-export-title" class="ltb-dialog-title">
           Export configuration
         </h2>
-        <p class="ltb-dialog-text">Ready to paste into a WordPress page as the shortcode, or into Import on another browser. Includes assignments and temporary filters.</p>
+        <p class="ltb-dialog-text">Ready to paste into a WordPress page as the shortcode, or into Import on another browser. Includes post selections, Final allowed tags, mergers, assignments, and temporary filters.</p>
         <textarea ref={textRef} class="ltb-textarea" readOnly rows={14} value={json} aria-label="Configuration JSON" onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
         {status && (
           <p class="ltb-muted ltb-dialog-status" role="status">
@@ -289,7 +295,7 @@ function ImportDialog({
             }}
           />
           <label class="ltb-checkbox">
-            <input type="checkbox" checked={replace} onChange={(e) => onReplaceChange((e.currentTarget as HTMLInputElement).checked)} /> Replace existing assignments
+            <input type="checkbox" checked={replace} onChange={(e) => onReplaceChange((e.currentTarget as HTMLInputElement).checked)} /> Replace existing configuration
           </label>
         </div>
         {status && (

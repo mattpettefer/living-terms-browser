@@ -1,3 +1,5 @@
+import { Final } from './views/Final';
+import { Mergers } from './views/Mergers';
 import { useHashRouter } from './effects/useHashRouter';
 import { usePersistence } from './effects/usePersistence';
 import { useTermInventory } from './effects/useTermInventory';
@@ -30,11 +32,15 @@ export function App({ persistence }: { persistence: PersistenceAdapter }) {
           <a class={`ltb-nav-link${view === 'config' ? ' is-active' : ''}`} aria-current={view === 'config' ? 'page' : undefined} href={`#/config/${state.ui.activeConfigCategory}`}>
             Config
           </a>
+          <a class={'ltb-nav-link' + (view === 'mergers' ? ' is-active' : '')} aria-current={view === 'mergers' ? 'page' : undefined} href="#/mergers">Mergers</a>
+          <a class={'ltb-nav-link' + (view === 'final' ? ' is-active' : '')} aria-current={view === 'final' ? 'page' : undefined} href="#/final">Final</a>
         </nav>
       </header>
       <main class="ltb-main">
         {(view === 'overview' || view === 'selections') && <Overview key={view} mode={view} />}
         {view === 'config' && <Config />}
+        {view === 'final' && <Final />}
+        {view === 'mergers' && <Mergers />}
         {view === 'article' && <ArticleView />}
       </main>
     </div>

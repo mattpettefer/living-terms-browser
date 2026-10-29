@@ -90,7 +90,22 @@ export interface UnresolvedAssignment {
   reason: string;
 }
 
+export interface Merger {
+  /** Omit this merger and its source members from Final; absent means false. */
+  excludeFromFinal?: boolean;
+  id: string;
+  name: string;
+  /** Canonical destination post_tag slug for migration. */
+  slug: string;
+  termKeys: TermKey[];
+}
+
+export type FinalTerms = Partial<Record<DestinationId, TermKey[]>>;
+
 export interface AppState {
+  /** Independent allowed source terms for destination tags; overlap across categories is allowed. */
+  finalTerms: FinalTerms;
+  mergers: Merger[];
   source: { baseUrl: string; postsRestBase: string };
   /** Raw configuration JSON embedded by the shortcode, if any, so it can be re-imported on demand. */
   pageSeed: string | null;
@@ -125,7 +140,8 @@ export interface AppState {
   articleRequestsById: Record<number, RequestState>;
 
   ui: {
-    view: 'overview' | 'selections' | 'config' | 'article';
+    view: 'overview' | 'selections' | 'config' | 'article' | 'mergers' | 'final';
+    finalCategory: DestinationId | 'all';
     listView: 'overview' | 'selections';
     selectionsCategory: DestinationId | 'all';
     selectionsPage: number;

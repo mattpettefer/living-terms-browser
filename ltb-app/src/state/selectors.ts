@@ -1,3 +1,4 @@
+import { getMergerIndex } from './mergers';
 import { destinationName } from './destinations';
 import type { AppState, Assignments, DestinationId, DestinationExclusions, FilterOperator, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
 
@@ -49,6 +50,7 @@ export function getExcludedSet(state: AppState): ReadonlySet<TermKey> {
 export function getVisibleTerms(state: AppState, search: string, categoriesOnly = false, minPostCount = 0): SourceTerm[] {
   const excluded = getExcludedSet(state);
   const q = search.trim().toLowerCase();
+  const mergerIndex = getMergerIndex(state);
   const out: SourceTerm[] = [];
   for (const key of state.termOrder) {
     if (excluded.has(key)) continue;
@@ -56,8 +58,10 @@ export function getVisibleTerms(state: AppState, search: string, categoriesOnly 
     if (!t) continue;
     if (categoriesOnly && t.taxonomy !== 'category') continue;
     // Do not hide a term with an unknown count while its inventory is still loading.
-    if (t.sourceCount != null && t.sourceCount < minPostCount) continue;
-    if (q && !t.name.toLowerCase().includes(q) && !t.slug.includes(q)) continue;
+    const merger = mergerIndex.byTerm.get(key);
+    const count = merger ? mergerIndex.counts.get(merger.id) : t.sourceCount;
+    if (count != null && count < minPostCount) continue;
+    if (q && !t.name.toLowerCase().includes(q) && !t.slug.includes(q) && !merger?.name.toLowerCase().includes(q) && !merger?.slug.includes(q)) continue;
     out.push(t);
   }
   return out;

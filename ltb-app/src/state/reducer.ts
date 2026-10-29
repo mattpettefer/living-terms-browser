@@ -1,3 +1,6 @@
+import { combineMergers, validateMergers, prepareMergerSave } from './mergers';
+import { mergeFinalTerms, validateFinalTerms } from './finalTerms';
+import type { Merger, FinalTerms } from './types';
 import { DESTINATIONS } from './destinations';
 import { getOverviewResults, getSelectionResults } from './selectors';
 import type {
@@ -17,6 +20,11 @@ import type {
 } from './types';
 
 export type Action =
+  | { type: 'NAVIGATE'; view: 'final'; category?: DestinationId | 'all' }
+  | { type: 'SET_FINAL_TERMS'; destination: DestinationId | 'all'; termKeys: TermKey[]; allowed: boolean }
+  | { type: 'NAVIGATE'; view: 'mergers' }
+  | { type: 'SAVE_MERGER'; merger: Merger; moves?: Partial<Record<TermKey, string>> }
+  | { type: 'REMOVE_MERGER'; id: string }
   | { type: 'NAVIGATE'; view: 'overview' | 'selections' }
   | { type: 'NAVIGATE'; view: 'config'; category?: ConfigTab }
   | { type: 'NAVIGATE'; view: 'article'; postId: number }
@@ -49,12 +57,13 @@ export type Action =
   | { type: 'ARTICLE_SUCCESS'; postId: number; requestId: string; post: PostRecord }
   | { type: 'ARTICLE_ERROR'; postId: number; requestId: string; error: string }
   | { type: 'TOGGLE_DESTINATION_NOT_TERM'; destination: DestinationId; termKey: TermKey }
+  | { type: 'SELECT_DESTINATION_TERMS'; termKeys: TermKey[]; destination: DestinationId; line: 'match' | 'not' }
   | { type: 'ASSIGN_TERM'; termKey: TermKey; destination: DestinationId }
   | { type: 'UNASSIGN_TERM'; termKey: TermKey }
   | { type: 'OPEN_MOVE'; termKey: TermKey; fromCategory: DestinationId; toCategory: DestinationId }
   | { type: 'CANCEL_MOVE' }
   | { type: 'CONFIRM_MOVE' }
-  | { type: 'IMPORT_CONFIG'; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null; tempFilters?: TempFilterSnapshot | null }
+  | { type: 'IMPORT_CONFIG'; mergers?: Merger[] | null; finalTerms?: FinalTerms | null; assignments: Assignments; unresolved: UnresolvedAssignment[]; replace: boolean; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null; tempFilters?: TempFilterSnapshot | null }
   | { type: 'TOGGLE_TEMP_FILTER_NOT_TERM'; termKey: TermKey; filterId?: string }
   | { type: 'TOGGLE_TEMP_FILTER_TERM'; termKey: TermKey; filterId?: string }
   | { type: 'SELECT_TEMP_FILTER_TERMS'; termKeys: TermKey[]; line: 'match' | 'not' }
@@ -88,13 +97,15 @@ export function normalizeTempFilters(snapshot?: Partial<TempFilterSnapshot> | nu
 
 export function createInitialState(
   source: AppState['source'],
-  saved?: { assignments: Assignments; unresolved: UnresolvedAssignment[]; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null },
+  saved?: { mergers?: Merger[] | null; finalTerms?: FinalTerms | null; assignments: Assignments; unresolved: UnresolvedAssignment[]; destinationExclusions?: DestinationExclusions | null; postSelections?: PostSelections | null },
   tempFilters?: Partial<TempFilterSnapshot> | null,
   pageSeed: string | null = null,
 ): AppState {
   const tf = normalizeTempFilters(tempFilters);
   return {
     source,
+    mergers: saved?.mergers ?? [],
+    finalTerms: saved?.finalTerms ?? {},
     pageSeed,
     destinationCategories: [...DESTINATIONS],
     termsByKey: {},
@@ -116,6 +127,7 @@ export function createInitialState(
     articleRequestsById: {},
     ui: {
       view: 'overview',
+      finalCategory: 'all',
       listView: 'overview',
       selectionsCategory: 'all',
       selectionsPage: 1,
@@ -214,10 +226,30 @@ function commitAssignments(state: AppState, assignments: Assignments): AppState 
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case 'SET_FINAL_TERMS': {
+      const finalTerms = { ...state.finalTerms };
+      let changed = false;
+      for (const destination of state.destinationCategories) {
+        if (action.destination !== 'all' && destination.id !== action.destination) continue;
+        const previous = state.finalTerms[destination.id] ?? [];
+        const keys = new Set(previous);
+        for (const key of action.termKeys) action.allowed ? keys.add(key) : keys.delete(key);
+        if (keys.size === previous.length && previous.every(key => keys.has(key))) continue;
+        finalTerms[destination.id] = [...keys]; changed = true;
+      }
+      return changed ? { ...state, finalTerms, persistence: { ...state.persistence, status: 'unsaved', error: null } } : state;
+    }
+    case 'SAVE_MERGER': {
+      const mergers = prepareMergerSave(state.mergers, action.merger, action.moves);
+      return { ...state, mergers, persistence: { ...state.persistence, status: 'unsaved' } };
+    }
+    case 'REMOVE_MERGER':
+      return { ...state, mergers: state.mergers.filter((m) => m.id !== action.id), persistence: { ...state.persistence, status: 'unsaved' } };
     case 'NAVIGATE': {
       const ui = { ...state.ui, pendingTermMove: null, view: action.view };
       if (action.view === 'overview' || action.view === 'selections') ui.listView = action.view;
       if (action.view === 'config' && action.category) ui.activeConfigCategory = action.category;
+      if (action.view === 'final' && action.category) ui.finalCategory = action.category;
       if (action.view === 'article') ui.selectedPostId = action.postId;
       return { ...state, ui };
     }
@@ -362,6 +394,20 @@ export function reducer(state: AppState, action: Action): AppState {
         destinationExclusions: { ...state.destinationExclusions, [action.destination]: removing ? keys.filter((key) => key !== action.termKey) : [...keys, action.termKey] },
       };
     }
+    case 'SELECT_DESTINATION_TERMS': {
+      const keys = [...new Set(action.termKeys)].filter((key) => state.termsByKey[key] && !state.excludedTermKeys.includes(key));
+      if (!keys.length) return state;
+      const assignments = { ...state.assignments };
+      const existingNot = state.destinationExclusions[action.destination] ?? [];
+      if (action.line === 'match') {
+        if (keys.every((key) => assignments[key] === action.destination && !existingNot.includes(key))) return state;
+        for (const key of keys) assignments[key] = action.destination;
+        return commitAssignments(state, assignments);
+      }
+      if (keys.every((key) => existingNot.includes(key) && assignments[key] !== action.destination)) return state;
+      for (const key of keys) if (assignments[key] === action.destination) delete assignments[key];
+      return { ...commitAssignments(state, assignments), destinationExclusions: { ...state.destinationExclusions, [action.destination]: [...new Set([...existingNot, ...keys])] } };
+    }
     case 'ASSIGN_TERM': {
       if (state.excludedTermKeys.includes(action.termKey)) return state;
       if (state.assignments[action.termKey] === action.destination) return state;
@@ -394,6 +440,8 @@ export function reducer(state: AppState, action: Action): AppState {
         if (!state.excludedTermKeys.includes(k)) assignments[k] = v;
       }
       const next = { ...commitAssignments(state, assignments), unresolvedAssignments: action.unresolved };
+      if (action.finalTerms != null) next.finalTerms = action.replace ? validateFinalTerms(action.finalTerms) : mergeFinalTerms(state.finalTerms, validateFinalTerms(action.finalTerms));
+      if (action.mergers != null) next.mergers = action.replace ? validateMergers(action.mergers) : combineMergers(state.mergers, action.mergers);
       if (action.destinationExclusions != null) {
         next.destinationExclusions = action.replace ? { ...action.destinationExclusions } : { ...state.destinationExclusions };
         if (!action.replace) for (const [destination, keys] of Object.entries(action.destinationExclusions) as [DestinationId, TermKey[]][]) {

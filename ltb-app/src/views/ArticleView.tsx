@@ -1,3 +1,7 @@
+import { FinalTermsPanel } from '../components/FinalTermsPanel';
+import { useSelectTermGroup } from '../effects/useSelectTermGroup';
+import { usePostIndex } from '../effects/usePostIndex';
+import { GroupedTerms } from '../components/GroupedTerms';
 import { useMemo } from 'preact/hooks';
 import { formatDate } from '../components/PostCard';
 import { ErrorState, LoadingState } from '../components/States';
@@ -5,7 +9,6 @@ import { TermButton } from '../components/TermButton';
 import { useArticle } from '../effects/useArticle';
 import { routeToHash } from '../effects/useHashRouter';
 import { prepareContent } from '../services/content';
-import { parseTermKey } from '../services/normalize';
 import { destinationName } from '../state/destinations';
 import { useStore } from '../state/provider';
 import { getActiveTempFilter, getExcludedSet, getMatchedDestinations, getPostMatches, joinNames } from '../state/selectors';
@@ -13,7 +16,9 @@ import type { SourceTerm, TermKey } from '../state/types';
 
 export function ArticleView() {
   const { state, dispatch } = useStore();
+  usePostIndex(state.mergers.length > 0);
   const postId = state.ui.selectedPostId;
+  const selectGroup = useSelectTermGroup();
   const { post, request, retry } = useArticle(postId);
   const excluded = getExcludedSet(state);
   const backHref = routeToHash({ view: state.ui.listView, category: state.ui.listView === 'selections' ? state.ui.selectionsCategory : state.ui.overviewCategory });
@@ -80,6 +85,8 @@ export function ArticleView() {
           )}
         </article>
 
+        <div class="ltb-article-sidebar-column">
+        <FinalTermsPanel post={post} />
         <aside class="ltb-article-sidebar" aria-labelledby="ltb-terms-heading">
           <h2 id="ltb-terms-heading" class="ltb-h3">Terms</h2>
           <p class="ltb-muted ltb-sidebar-hint">
@@ -90,8 +97,9 @@ export function ArticleView() {
             <p class="ltb-muted">This post has no categories or tags.</p>
           ) : (
             <div class="ltb-term-list">
-              {terms.map(({ key, term }) => {
-                const t: SourceTerm = term ?? placeholderTerm(key);
+              <GroupedTerms keys={terms.map((t) => t.key)} onSelectAll={(keys) => selectGroup(keys, 'match')} isSelected={(key) => filterSet.has(key)} renderTerm={(t, _grouped, present) => {
+                const key = t.key;
+                const term = state.termsByKey[key];
                 const isExcluded = excluded.has(key);
                 const owner = state.assignments[key];
                 const inFilter = filterSet.has(key);
@@ -102,7 +110,7 @@ export function ArticleView() {
                     : null;
                 const filterNote = activeFilter.notTermKeys?.includes(key) ? 'Excluded by ' + activeFilter.name + ' (NOT) — click to move to matching terms.' : inFilter ? `Selected in ${activeFilter.name} — click to remove.` : isExcluded ? null : `Click to add this term to ${activeFilter.name}.`;
                 const tooltip = [base, filterNote].filter(Boolean).join(' ') || null;
-                const detail = term ? null : 'Label not yet resolved';
+                const detail = !present ? 'Companion term — not attached to this article' : term ? null : 'Label not yet resolved';
 
                 return (
                   <TermButton
@@ -113,14 +121,15 @@ export function ArticleView() {
                     owner={inFilter ? null : (owner ?? null)}
                     tooltip={tooltip}
                     detail={detail}
-                    disabled={isExcluded}
+                    disabled={isExcluded || !term}
                     onClick={() => dispatch({ type: 'TOGGLE_TEMP_FILTER_TERM', termKey: key })}
                   />
                 );
-              })}
+              }} />
             </div>
           )}
         </aside>
+        </div>
       </div>
     </section>
   );
@@ -128,9 +137,4 @@ export function ArticleView() {
 
 function labelFor(x: { key: TermKey; term: SourceTerm | undefined }): string {
   return x.term?.name ?? x.key;
-}
-
-function placeholderTerm(key: TermKey): SourceTerm {
-  const parsed = parseTermKey(key);
-  return { key, id: parsed?.id ?? 0, taxonomy: parsed?.taxonomy ?? 'category', name: key, slug: '', sourceCount: null };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { CopyToFinal } from '../components/CopyToFinal';
 import { PostCard } from '../components/PostCard';
 import { EmptyState, ErrorState, LoadingState } from '../components/States';
 import { navigate } from '../effects/useHashRouter';
@@ -113,6 +114,7 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
         </div>
       )}
 
+      {!selections && category !== 'all' && <div class="ltb-final-actions"><CopyToFinal key={category} destination={category} /><a href={'#/final/' + category}>Review Final tags</a></div>}
       <header class="ltb-results-header">
         <h2 id="ltb-overview-heading" class="ltb-h2">
           {label}

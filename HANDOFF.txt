@@ -25,4 +25,19 @@ Validation
 Latest source validation: npm test passed 98 tests across 13 files; npm run build passed; git diff --check passed. Built plugin assets are included in this commit.
 Run commands from ltb-app: npm test; npm run build; npm run dev -- --host 127.0.0.1.
 
-No implementation task remains pending. Continue from the user's next request. This handoff accompanies a local Git commit; no remote push was requested.
+Mergers feature added after commit 6392e2b
+The new top-level Mergers tab follows Config at #/mergers. Definitions store a stable ID, destination tag name/slug, and original source term keys. They autosave, export/import under schema version 2, and support legacy documents without mergers. The app still does not execute migration.
+
+The user revised the architecture: use a secondary display array, not synthetic matching keys. groupTerms in state/mergers.ts gathers members into one bar at their first occurrence and supplies absent members as dimmed companions. Clicking members changes original selections independently. Original post data, destination assignments, AND/OR/NOT, Selections, and Excluded Posts matching requirements are unchanged.
+
+Each group shows ONE unique-post union total. Individual counts are suppressed inside grouped bars. Minimum posts compares the union count; ungrouped terms retain source counts. Categories only still gates original terms first; a mixed group can bring tag companions into view, but a tag-only group does not independently pass that gate. Select all shown selects all displayed members including companions. Grouping applies to Config, MATCH/NOT rows in all views, article terms, and excluded-post terms. Definitions are editable/dissolvable without rewriting filter references.
+
+Mergers loads the lightweight post index for exact totals and offers an unsaved combined-count preview plus a saved group's post list. Counts remain unknown until complete. In live data, Leadership category 4555 has 13 posts and leadership tag 957 has 14; their union is 26 due to one overlap.
+
+Latest validation after this feature: 111 tests across 15 files and production build passed. New changes are uncommitted; no push requested.
+
+Current implementation - October 29, 2026
+This section supersedes the earlier validation and uncommitted-status notes.
+Final follows Mergers and uses explicit post selections, with separate allowed tags per destination. All categories combines tags into one list and removing a tag there removes it from every destination. Final always lists allowed tags, with a separate search to add unselected tags. Mergers display only their canonical name in Final and in the article's top-right final terms preview. Counts represent posts receiving an allowed tag. Copy from Overview preserves post selections. Configuration schema version 3 persists Final choices and merger definitions, including the optional excludeFromFinal flag; older imports preserve omitted settings.
+Merger ownership is exclusive, with explicit transfer controls. Shared terms in the merger post preview are the intersection across all unique posts. Editing a merger scrolls to the editor and focuses the name field.
+Validation: 134 tests across 17 files passed; TypeScript and production build passed. Rebuilt plugin assets accompany the source. The user requested committing and pushing these changes to origin/main.

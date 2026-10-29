@@ -1,11 +1,16 @@
+import { validateMergers } from '../state/mergers';
+import { validateFinalTerms } from '../state/finalTerms';
+import type { Merger, FinalTerms } from '../state/types';
 import { DESTINATIONS, migrateDestinationId } from '../state/destinations';
 import { newTempFilter, type TempFilterSnapshot } from '../state/reducer';
 import type { Assignments, DestinationExclusions, PostSelections, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
 import { normalizeSourceUrl, parseTermKey } from './normalize';
 
-export const CONFIG_SCHEMA_VERSION = 1;
+export const CONFIG_SCHEMA_VERSION = 3;
 
 export interface ConfigDocument {
+  mergers?: Merger[];
+  finalTerms?: FinalTerms;
   schemaVersion: number;
   sourceUrl: string;
   destinations: Array<{ id: DestinationId; name: string }>;
@@ -20,6 +25,8 @@ export interface ConfigDocument {
 }
 
 export interface ImportResult {
+  mergers: Merger[] | null;
+  finalTerms: FinalTerms | null;
   assignments: Assignments;
   unresolved: UnresolvedAssignment[];
   destinationExclusions: DestinationExclusions | null;
@@ -46,6 +53,8 @@ export function storageKey(sourceUrl: string): string {
 }
 
 export function buildConfigDocument(input: {
+  mergers?: Merger[];
+  finalTerms?: FinalTerms;
   sourceUrl: string;
   assignments: Assignments;
   destinationExclusions?: DestinationExclusions;
@@ -63,6 +72,8 @@ export function buildConfigDocument(input: {
     unresolvedAssignments: input.unresolvedAssignments,
     modifiedAt: new Date().toISOString(),
   };
+  if (input.finalTerms) doc.finalTerms = input.finalTerms;
+  if (input.mergers) doc.mergers = input.mergers;
   if (input.destinationExclusions) doc.destinationExclusions = input.destinationExclusions;
   if (input.postSelections) doc.postSelections = input.postSelections;
   if (input.tempFilters) doc.tempFilters = input.tempFilters;
@@ -237,5 +248,7 @@ export function validateImport(
       destinationExclusions[destination] = [...new Set([...(destinationExclusions[destination] ?? []), ...keys])];
     }
   }
-  return { assignments, unresolved, tempFilters, postSelections, destinationExclusions };
+  const mergers = doc.mergers === undefined ? null : validateMergers(doc.mergers);
+  const finalTerms = doc.finalTerms === undefined ? null : validateFinalTerms(doc.finalTerms);
+  return { finalTerms, mergers, assignments, unresolved, tempFilters, postSelections, destinationExclusions };
 }

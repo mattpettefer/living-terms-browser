@@ -1,3 +1,4 @@
+import { GroupedTerms } from './GroupedTerms';
 import { useState } from 'preact/hooks';
 import { PostCard } from './PostCard';
 import { TermPostCount } from './TermPostCount';
@@ -24,15 +25,9 @@ export function ExcludedPostsList({ posts }: { posts: PostRecord[] }) {
               <PostCard post={post} imageUrl={imageFor(post, state.mediaById)}
                 matchedDestinations={getMatchedDestinations(getPostMatches(post, state.assignments, excluded, state.destinationExclusions))} />
               <div class="ltb-excluded-post-terms">
-                {(['category', 'post_tag'] as const).map((taxonomy) => {
-                  const keys = post.termKeys.filter((key) => key.startsWith(taxonomy + ':'));
-                  return <div key={taxonomy}>
-                    <strong>{taxonomy === 'category' ? 'Categories' : 'Tags'}:</strong>
-                    {keys.length === 0 ? <span class="ltb-muted"> None</span> : <ul>
-                      {keys.map((key) => <li key={key}><span>{state.termsByKey[key]?.name ?? key}</span><TermPostCount count={state.termsByKey[key]?.sourceCount} /></li>)}
-                    </ul>}
-                  </div>;
-                })}
+                <GroupedTerms keys={post.termKeys} renderTerm={(term, grouped, present) => <span key={term.key} class="ltb-excluded-term" title={present ? term.taxonomy === 'category' ? 'Source category' : 'Source tag' : 'Companion term — not attached to this post'}>
+                  <span>{term.name}</span>{!grouped && <TermPostCount count={term.sourceCount} />}
+                </span>} />
               </div>
             </div>
           ))}

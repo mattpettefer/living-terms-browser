@@ -1,3 +1,8 @@
+import { useSelectTermGroup } from '../effects/useSelectTermGroup';
+import type { TermKey } from '../state/types';
+import { GroupedTerms } from '../components/GroupedTerms';
+import { groupTerms, getMergerIndex } from '../state/mergers';
+import { usePostIndex } from '../effects/usePostIndex';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { AssignTermDialog } from '../components/AssignTermDialog';
 import { MoveTermDialog } from '../components/MoveTermDialog';
@@ -20,7 +25,9 @@ const TEMP = 'temp-filter' as const;
 
 export function Config() {
   const { state, dispatch } = useStore();
+  const selectGroup = useSelectTermGroup();
   const { retry } = useTermInventory();
+  const { index, retry: retryTotals } = usePostIndex(state.mergers.length > 0);
   const active = state.ui.activeConfigCategory;
   const isUnassignedTab = active === UNASSIGNED;
   const isTempTab = active === TEMP;
@@ -44,7 +51,7 @@ export function Config() {
   const termSort = state.ui.termSort;
   const alphabetical = useMemo(
     () => getVisibleTerms(state, search, categoriesOnly, minPostCount),
-    [state.termOrder, state.termsByKey, state.excludedTermKeys, search, categoriesOnly, minPostCount],
+    [state.termOrder, state.termsByKey, state.excludedTermKeys, state.mergers, state.postsById, state.postOrder, state.postIndex, search, categoriesOnly, minPostCount],
   );
   const visible = useMemo(() => {
     if (isUnassignedTab) return alphabetical.filter((t) => !state.assignments[t.key]);
@@ -52,6 +59,9 @@ export function Config() {
     if (isTempTab) return sortSelectedFirst(alphabetical, (t) => tempSet.has(t.key));
     return sortSelectedFirst(alphabetical, (t) => filterLine === 'not' ? destinationNotSet.has(t.key) : state.assignments[t.key] === activeDestination);
   }, [alphabetical, termSort, state.assignments, activeDestination, isUnassignedTab, isTempTab, tempSet, filterLine, destinationNotSet]);
+  const groups = groupTerms(state, visible.map((t) => t.key));
+  const shownKeys = groups.flatMap((g) => g.keys).filter((key) => !!state.termsByKey[key] && !state.excludedTermKeys.includes(key));
+  const totalsPending = state.mergers.length > 0 && [...getMergerIndex(state).counts.values()].some((count) => count === null);
   const unassignedCount = useMemo(
     () => getVisibleTerms(state, '', false).filter((t) => !state.assignments[t.key]).length,
     [state.termOrder, state.termsByKey, state.excludedTermKeys, state.assignments],
@@ -60,18 +70,29 @@ export function Config() {
   // Incremental rendering: grow the rendered window as the user scrolls near the end.
   const [limit, setLimit] = useState(CHUNK);
   const sentinel = useRef<HTMLDivElement>(null);
-  useEffect(() => setLimit(CHUNK), [search, active, categoriesOnly, minPostCount, termSort, filterLine, activeFilter.id]);
+  useEffect(() => setLimit(CHUNK), [search, active, categoriesOnly, minPostCount, termSort, filterLine, activeFilter.id, state.mergers]);
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || limit >= visible.length) return;
-    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setLimit((l) => Math.min(l + CHUNK, visible.length)));
+    if (!el || limit >= groups.length) return;
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setLimit((l) => Math.min(l + CHUNK, groups.length)));
     io.observe(el);
     return () => io.disconnect();
-  }, [limit, visible.length]);
+  }, [limit, groups.length]);
 
   const lastTrigger = useRef<HTMLElement | null>(null);
   const [assigning, setAssigning] = useState<SourceTerm | null>(null);
+  const [assigningGroup, setAssigningGroup] = useState<TermKey[] | null>(null);
+  const onGroupSelect = (keys: TermKey[], name: string) => {
+    lastTrigger.current = document.activeElement as HTMLElement;
+    if (isTempTab) selectGroup(keys, filterLine);
+    else if (activeDestination) selectGroup(keys, filterLine, activeDestination);
+    else {
+      const first = keys.map((key) => state.termsByKey[key]).find((term) => term && !state.excludedTermKeys.includes(term.key));
+      if (first) { setAssigningGroup(keys); setAssigning({ ...first, name: name + ' (all members)' }); }
+    }
+  };
   const onTermClick = (term: SourceTerm, ev?: Event) => {
+    setAssigningGroup(null);
     lastTrigger.current = (ev?.currentTarget as HTMLElement) ?? (document.activeElement as HTMLElement);
     if (isTempTab) {
       dispatch({ type: filterLine === 'not' ? 'TOGGLE_TEMP_FILTER_NOT_TERM' : 'TOGGLE_TEMP_FILTER_TERM', termKey: term.key });
@@ -96,7 +117,9 @@ export function Config() {
     restoreFocus();
   };
   const closeAssign = (destination?: DestinationId) => {
-    if (assigning && destination) dispatch({ type: 'ASSIGN_TERM', termKey: assigning.key, destination });
+    if (assigningGroup && destination) selectGroup(assigningGroup, 'match', destination);
+    else if (assigning && destination) dispatch({ type: 'ASSIGN_TERM', termKey: assigning.key, destination });
+    setAssigningGroup(null);
     setAssigning(null);
     restoreFocus();
   };
@@ -216,9 +239,9 @@ export function Config() {
           </div>
           {isTempTab && (
             <button type="button" class="ltb-btn"
-              disabled={!inventory.complete || inventory.status !== 'success' || visible.length === 0}
-              title={`Add all ${visible.length.toLocaleString()} displayed terms to ${activeFilter.name}’s ${filterLine === 'not' ? 'NOT' : 'MATCH'} row, including terms beyond Show more.`}
-              onClick={() => dispatch({ type: 'SELECT_TEMP_FILTER_TERMS', line: filterLine, termKeys: visible.map((term) => term.key) })}>
+              disabled={!inventory.complete || inventory.status !== 'success' || (minPostCount > 0 && totalsPending) || visible.length === 0}
+              title={`Add all ${shownKeys.length.toLocaleString()} displayed terms to ${activeFilter.name}’s ${filterLine === 'not' ? 'NOT' : 'MATCH'} row, including terms beyond Show more.`}
+              onClick={() => dispatch({ type: 'SELECT_TEMP_FILTER_TERMS', line: filterLine, termKeys: shownKeys })}>
               Select all shown
             </button>
           )}
@@ -233,12 +256,13 @@ export function Config() {
           </span>
         </div>
 
+        {totalsPending && <p class="ltb-muted" role="status">Loading unique post totals for mergers. Minimum posts will apply when totals are available.{index.status === 'error' && <button class="ltb-btn" onClick={retryTotals}>Retry totals</button>}</p>}
         {inventory.status === 'error' && <ErrorState message={`Could not load the term inventory: ${inventory.error}`} onRetry={retry} />}
         {inventory.status === 'loading' && visible.length === 0 && <LoadingState label="Loading terms…" />}
         {inventory.complete && visible.length === 0 && <p class="ltb-muted">{isUnassignedTab && unassignedCount === 0 ? 'Every eligible term is assigned.' : 'No terms match the current display filters.'}</p>}
 
         <div class="ltb-term-list">
-          {visible.slice(0, limit).map((t) => {
+          <GroupedTerms groups={groups.slice(0, limit)} onSelectAll={onGroupSelect} isSelected={(key) => isTempTab ? tempSet.has(key) : isUnassignedTab ? !state.assignments[key] : filterLine === 'not' ? destinationNotSet.has(key) : state.assignments[key] === activeDestination} renderTerm={(t, grouped) => {
             const owner = state.assignments[t.key];
             const dup = (duplicates.get(t.name.toLowerCase()) ?? 0) > 1;
             const inTemp = tempSet.has(t.key);
@@ -247,7 +271,8 @@ export function Config() {
               <TermButton
                 key={t.key}
                 term={t}
-                showPostCount
+                showPostCount={!grouped}
+                disabled={state.excludedTermKeys.includes(t.key) || !state.termsByKey[t.key]}
                 selected={isTempTab ? inTemp : !isUnassignedTab && filterLine === 'not' ? destinationNotSet.has(t.key) : owner === active}
                 owner={isTempTab && inTemp ? null : activeDestination && filterLine === 'not' && destinationNotSet.has(t.key) ? activeDestination : (owner ?? null)}
                 tone={isTempTab ? 'filter' : 'destination'}
@@ -256,12 +281,12 @@ export function Config() {
                 onClick={(term) => onTermClick(term)}
               />
             );
-          })}
+          }} />
         </div>
-        {limit < visible.length && (
+        {limit < groups.length && (
           <div ref={sentinel} class="ltb-load-more">
-            <button type="button" class="ltb-btn" onClick={() => setLimit((l) => Math.min(l + CHUNK, visible.length))}>
-              Show more ({(visible.length - limit).toLocaleString()} remaining)
+            <button type="button" class="ltb-btn" onClick={() => setLimit((l) => Math.min(l + CHUNK, groups.length))}>
+              Show more ({(groups.length - limit).toLocaleString()} remaining)
             </button>
           </div>
         )}

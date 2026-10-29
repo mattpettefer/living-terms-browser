@@ -4,6 +4,8 @@ import { useStore } from '../state/provider';
 import type { ConfigTab, DestinationId } from '../state/types';
 
 export type Route =
+  | { view: 'final'; category: DestinationId | 'all' }
+  | { view: 'mergers' }
   | { view: 'overview'; category: DestinationId | 'all' }
   | { view: 'selections'; category: DestinationId | 'all' }
   | { view: 'config'; category: ConfigTab }
@@ -12,6 +14,8 @@ export type Route =
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const [head, arg] = parts;
+  if (head === 'final') return { view: 'final', category: isDestinationId(arg) ? arg : 'all' };
+  if (head === 'mergers') return { view: 'mergers' };
   if (head === 'selections') return { view: 'selections', category: isDestinationId(arg) ? arg : 'all' };
   if (head === 'config') return { view: 'config', category: isDestinationId(arg) || arg === 'unassigned' || arg === 'temp-filter' ? arg : 'campus-life' };
   if (head === 'article' && arg && /^\d+$/.test(arg)) return { view: 'article', postId: Number(arg) };
@@ -20,6 +24,7 @@ export function parseHash(hash: string): Route {
 
 export function routeToHash(route: Route): string {
   switch (route.view) {
+    case 'mergers': return '#/mergers';
     case 'config':
       return `#/config/${route.category}`;
     case 'article':
@@ -46,7 +51,9 @@ export function useHashRouter() {
       if (route.view === 'overview' || route.view === 'selections') {
         dispatch({ type: route.view === 'selections' ? 'SET_SELECTIONS_CATEGORY' : 'SET_OVERVIEW_CATEGORY', category: route.category });
         dispatch({ type: 'NAVIGATE', view: route.view });
-      } else if (route.view === 'config') dispatch({ type: 'NAVIGATE', view: 'config', category: route.category });
+      } else if (route.view === 'final') dispatch({ type: 'NAVIGATE', view: 'final', category: route.category });
+      else if (route.view === 'mergers') dispatch({ type: 'NAVIGATE', view: 'mergers' });
+      else if (route.view === 'config') dispatch({ type: 'NAVIGATE', view: 'config', category: route.category });
       else dispatch({ type: 'NAVIGATE', view: 'article', postId: route.postId });
     };
     apply();

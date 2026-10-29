@@ -1,3 +1,4 @@
+import type { Merger, FinalTerms } from './state/types';
 import { render } from 'preact';
 import { App } from './app';
 import { loadTempFilters, localStorageAdapter, unwrapShortcode, validateImport } from './services/persistence';
@@ -10,14 +11,14 @@ import './styles/article.css';
 
 const DEFAULT_SOURCE = 'https://living.life.edu';
 
-type SavedConfig = { destinationExclusions: DestinationExclusions | null; postSelections: PostSelections | null; assignments: Assignments; unresolved: UnresolvedAssignment[] };
+type SavedConfig = { finalTerms: FinalTerms | null; mergers: Merger[] | null; destinationExclusions: DestinationExclusions | null; postSelections: PostSelections | null; assignments: Assignments; unresolved: UnresolvedAssignment[] };
 
 function loadSaved(sourceUrl: string): SavedConfig | undefined {
   try {
     const doc = localStorageAdapter.load(sourceUrl);
     if (!doc) return undefined;
     const r = validateImport(doc, { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
-    return { destinationExclusions: r.destinationExclusions, postSelections: r.postSelections, assignments: r.assignments, unresolved: r.unresolved };
+    return { finalTerms: r.finalTerms, mergers: r.mergers, destinationExclusions: r.destinationExclusions, postSelections: r.postSelections, assignments: r.assignments, unresolved: r.unresolved };
   } catch (e) {
     console.error('[ltb] Could not restore saved configuration:', e);
     return undefined;
@@ -40,7 +41,7 @@ function applySeed(text: string | null, sourceUrl: string, hasSaved: boolean): (
     const r = validateImport(JSON.parse(unwrapShortcode(text)), { sourceUrl, excludedTermKeys: new Set(), knownTermKeys: null });
     markSeedApplied(sourceUrl, text);
     console.info(`[ltb] Imported ${Object.keys(r.assignments).length} assignments from page configuration.`);
-    return { destinationExclusions: r.destinationExclusions, postSelections: r.postSelections, assignments: r.assignments, unresolved: r.unresolved, tempFilters: r.tempFilters };
+    return { finalTerms: r.finalTerms, mergers: r.mergers, destinationExclusions: r.destinationExclusions, postSelections: r.postSelections, assignments: r.assignments, unresolved: r.unresolved, tempFilters: r.tempFilters };
   } catch (e) {
     console.error('[ltb] Shortcode configuration could not be imported:', e);
     return undefined;
@@ -59,8 +60,8 @@ function mount(el: HTMLElement) {
 
   const seedText = readSeedText(el);
   const saved = loadSaved(source.baseUrl);
-  const seeded = applySeed(seedText, source.baseUrl, !!saved && (Object.keys(saved.assignments).length > 0 || Object.keys(saved.postSelections ?? {}).length > 0));
-  const initial: AppState = createInitialState(source, seeded ? { ...seeded, destinationExclusions: seeded.destinationExclusions ?? saved?.destinationExclusions, postSelections: seeded.postSelections ?? saved?.postSelections } : saved, seeded?.tempFilters ?? loadTempFilters(source.baseUrl), seedText);
+  const seeded = applySeed(seedText, source.baseUrl, !!saved);
+  const initial: AppState = createInitialState(source, seeded ? { ...seeded, finalTerms: seeded.finalTerms ?? saved?.finalTerms ?? null, mergers: seeded.mergers ?? saved?.mergers ?? null, destinationExclusions: seeded.destinationExclusions ?? saved?.destinationExclusions, postSelections: seeded.postSelections ?? saved?.postSelections } : saved, seeded?.tempFilters ?? loadTempFilters(source.baseUrl), seedText);
   if (seeded) initial.persistence = { ...initial.persistence, status: 'unsaved' };
 
   render(
