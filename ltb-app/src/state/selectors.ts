@@ -1,6 +1,7 @@
+import { selectedDestinations } from './postSelections';
 import { getMergerIndex } from './mergers';
 import { destinationName } from './destinations';
-import type { AppState, Assignments, DestinationId, DestinationExclusions, FilterOperator, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
+import type { AppState, SelectionsCategory, Assignments, DestinationId, DestinationExclusions, FilterOperator, PostMatches, PostRecord, SourceTerm, TempFilter, TermKey } from './types';
 
 export function getAssignedTerms(state: AppState, destinationId: DestinationId): SourceTerm[] {
   const out: SourceTerm[] = [];
@@ -131,15 +132,15 @@ export function getOverviewResults(state: AppState, category: DestinationId | 'a
 }
 
 /** Explicit choices are independent of source-term assignments. */
-export function getSelectionResults(state: AppState, category: DestinationId | 'all'): OverviewResults {
-  const primary = state.postOrder.map((id) => state.postsById[id]).filter((p): p is PostRecord => !!p && (category === 'all' || state.postSelections[p.id] === category));
+export function getSelectionResults(state: AppState, category: SelectionsCategory): OverviewResults {
+  const primary = state.postOrder.map((id) => state.postsById[id]).filter((p): p is PostRecord => !!p && (category === 'all' || (category === 'uncategorized' ? state.postSelections[p.id] == null : selectedDestinations(state, p.id).includes(category))));
   const filter = getActiveTempFilter(state);
   return { matching: applyTempFilter(primary, state.tempFilterEnabled ? filter.termKeys : [], filter.operator, state.tempFilterEnabled ? filter.notTermKeys : []), primaryCount: primary.length, emptyAssignment: false };
 }
 
 export function getSelectionCounts(state: AppState): Record<DestinationId, number> {
   const counts = Object.fromEntries(state.destinationCategories.map((d) => [d.id, 0])) as Record<DestinationId, number>;
-  for (const id of state.postOrder) { const destination = state.postSelections[id]; if (destination && state.postsById[id]) counts[destination]++; }
+  for (const id of new Set(state.postOrder)) if (state.postsById[id]) for (const destination of selectedDestinations(state, id)) counts[destination]++;
   return counts;
 }
 

@@ -1,3 +1,4 @@
+import { selectedDestinations } from './postSelections';
 import { displayTerm, getMergerIndex, groupTerms } from './mergers';
 import type { AppState, DestinationId, FinalTerms, PostRecord, TermKey } from './types';
 import { migrateDestinationId } from './destinations';
@@ -26,7 +27,7 @@ export function mergeFinalTerms(existing: FinalTerms, incoming: FinalTerms): Fin
 /** Editorial selections alone define Final's posts; matching rules and temporary filters do not. */
 export function getFinalPosts(state: AppState, destination: DestinationId | 'all'): PostRecord[] {
   return [...new Set(state.postOrder)].map(id => state.postsById[id])
-    .filter((post): post is PostRecord => !!post && !!state.postSelections[post.id] && (destination === 'all' || state.postSelections[post.id] === destination));
+    .filter((post): post is PostRecord => !!post && !!state.postSelections[post.id] && (destination === 'all' || selectedDestinations(state, post.id).includes(destination)));
 }
 
 export function getFinalExcludedTermKeys(state: AppState): Set<TermKey> {
@@ -47,9 +48,9 @@ export interface FinalTag { id: string; name: string; slug: string }
 
 /** Retain allowed original terms attached to this post, then collapse merger members. */
 export function getFinalTags(state: AppState, post: PostRecord): FinalTag[] {
-  const destination = state.postSelections[post.id];
-  if (!destination) return [];
-  const allowed = getEffectiveFinalTermKeys(state, destination);
+  const destinations = selectedDestinations(state, post.id);
+  if (!destinations.length) return [];
+  const allowed = new Set(destinations.flatMap(destination => [...getEffectiveFinalTermKeys(state, destination)]));
   const mergers = getMergerIndex(state);
   const result = new Map<string, FinalTag>();
   for (const key of new Set(post.termKeys)) {
@@ -69,7 +70,7 @@ export function getFinalTags(state: AppState, post: PostRecord): FinalTag[] {
 export function getFinalTermGroups(state: AppState, destination: DestinationId | 'all') {
   const posts = getFinalPosts(state, destination);
   const destinations = state.destinationCategories.filter(d => destination === 'all' || d.id === destination);
-  const allowedByDestination = new Map(destinations.map(d => [d.id, getEffectiveFinalTermKeys(state, d.id)]));
+  const allowedByDestination = new Map(state.destinationCategories.map(d => [d.id, getEffectiveFinalTermKeys(state, d.id)]));
   const keys = [...new Set([...posts.flatMap(post => post.termKeys), ...destinations.flatMap(d => state.finalTerms[d.id] ?? [])])];
   const groups = groupTerms(state, keys).filter(group => !group.merger?.excludeFromFinal).map(group => {
     const term = displayTerm(state, group.keys[0]!);
@@ -78,10 +79,12 @@ export function getFinalTermGroups(state: AppState, destination: DestinationId |
       ...group,
       name: group.merger?.name ?? term.name,
       slug: group.merger?.slug ?? term.slug,
-      selected: [...allowedByDestination.values()].some(allowed => group.keys.some(key => allowed.has(key))),
+      selected: destinations.some(d => group.keys.some(key => allowedByDestination.get(d.id)?.has(key))),
       count: posts.filter(post => {
-        const allowed = allowedByDestination.get(state.postSelections[post.id]!);
-        return post.termKeys.some(key => members.has(key) && allowed?.has(key));
+        return selectedDestinations(state, post.id).some(d => {
+          const allowed = allowedByDestination.get(d);
+          return post.termKeys.some(key => members.has(key) && allowed?.has(key));
+        });
       }).length,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));

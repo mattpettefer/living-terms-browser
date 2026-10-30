@@ -64,14 +64,17 @@ Podcast. The previous name-based exclusions no longer apply.
 == Post selections ==
 
 Overview continues to group posts by their source-term assignments. The middle
-Selections tab has All Posts and the same six destination tabs, using each
-post's explicit selection instead. All Posts includes posts with no selection.
+Selections has All Posts, six destination tabs, and Uncategorized. It uses
+explicit selections. All Posts includes every post once; Uncategorized shows
+posts with no destination selection. Temporary filters apply to these lists.
 
-The six colored buttons above each card's category divider choose one
-destination. Selecting another replaces it; clicking the active choice clears
-it. The solid button is selected and the other buttons are faded. Hover for
-full category names. Choices are saved locally and are included in JSON and
-shortcode exports as postSelections, keyed by source post ID.
+The six colored buttons above each card's category divider toggle up to two
+destination categories. Click a selected category to remove just that choice.
+After two are selected, remove one before choosing another. A post appears in
+both selected category lists. Choices are saved locally and in JSON/shortcode
+exports as postSelections, keyed by source post ID. Schema 4 keeps a string
+for one category and uses a two-item array for two; legacy imports still work.
+Final retains the union of tags allowed by either category, without duplicates.
 
 Importing older configurations without postSelections preserves current
 choices. With postSelections present, Replace replaces the choices and Merge
@@ -80,9 +83,12 @@ Overview destination tabs include Select all. It assigns every post matching
 that destination and the active temporary filter, including cards behind
 Show more. The action waits for the complete source post index and stays
 disabled if loading fails. Matching posts' existing destination choices are
-replaced; nonmatching posts and source-term assignments are unchanged.
+preserved unless Replace existing selections is enabled; enabling it replaces
+all choices on matching posts. Nonmatching posts and source-term assignments
+are unchanged.
 Deselect all is available in destination sections of both Overview and
 Selections. It clears that destination's choices across the full matching
 set, including cards behind Show more, and respects the temporary filter.
+A post's other selected category is preserved.
 Choices for other destinations are preserved. Like Select all, it waits for
 the complete post index before becoming available.

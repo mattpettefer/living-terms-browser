@@ -1,3 +1,4 @@
+import { packSelection } from '../state/postSelections';
 import { validateMergers } from '../state/mergers';
 import { validateFinalTerms } from '../state/finalTerms';
 import type { Merger, FinalTerms } from '../state/types';
@@ -6,7 +7,7 @@ import { newTempFilter, type TempFilterSnapshot } from '../state/reducer';
 import type { Assignments, DestinationExclusions, PostSelections, DestinationId, TempFilter, TermKey, UnresolvedAssignment } from '../state/types';
 import { normalizeSourceUrl, parseTermKey } from './normalize';
 
-export const CONFIG_SCHEMA_VERSION = 3;
+export const CONFIG_SCHEMA_VERSION = 4;
 
 export interface ConfigDocument {
   mergers?: Merger[];
@@ -222,9 +223,10 @@ export function validateImport(
     if (!doc.postSelections || typeof doc.postSelections !== 'object' || Array.isArray(doc.postSelections)) throw new Error('Post selections must be an object keyed by post ID.');
     postSelections = {};
     for (const [id, value] of Object.entries(doc.postSelections)) {
-      const destination = migrateDestinationId(value);
-      if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)) || !destination) throw new Error('Invalid post selection for post ' + id + '.');
-      postSelections[Number(id)] = destination;
+      const raw = Array.isArray(value) ? value : [value];
+      const destinations = raw.map(migrateDestinationId);
+      if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)) || raw.length < 1 || raw.length > 2 || destinations.some(d => !d) || new Set(destinations).size !== destinations.length) throw new Error('Invalid post selection for post ' + id + '. Choose one or two distinct categories.');
+      postSelections[Number(id)] = packSelection(destinations as DestinationId[]);
     }
   }
   let destinationExclusions: DestinationExclusions | null = null;

@@ -1,3 +1,4 @@
+import { selectedDestinations, packSelection } from './postSelections';
 import { combineMergers, validateMergers, prepareMergerSave } from './mergers';
 import { mergeFinalTerms, validateFinalTerms } from './finalTerms';
 import type { Merger, FinalTerms } from './types';
@@ -7,6 +8,7 @@ import type {
   AppState,
   Assignments,
   ConfigTab,
+  SelectionsCategory,
   DestinationId,
   DestinationExclusions,
   FilterOperator,
@@ -30,8 +32,9 @@ export type Action =
   | { type: 'NAVIGATE'; view: 'article'; postId: number }
   | { type: 'DESELECT_ALL'; destination: DestinationId; view: 'overview' | 'selections' }
   | { type: 'SELECT_ALL_OVERVIEW'; destination: DestinationId; replaceExisting?: boolean }
+  | { type: 'TOGGLE_POST_DESTINATION'; postId: number; destination: DestinationId }
   | { type: 'SELECT_POST_DESTINATION'; postId: number; destination: DestinationId | null }
-  | { type: 'SET_SELECTIONS_CATEGORY'; category: DestinationId | 'all' }
+  | { type: 'SET_SELECTIONS_CATEGORY'; category: SelectionsCategory }
   | { type: 'SET_SELECTIONS_SCROLL'; scrollY: number }
   | { type: 'SET_OVERVIEW_CATEGORY'; category: DestinationId | 'all' }
   | { type: 'SET_OVERVIEW_SCROLL'; scrollY: number }
@@ -263,8 +266,11 @@ export function reducer(state: AppState, action: Action): AppState {
       const postSelections = { ...state.postSelections };
       let changed = false;
       for (const post of matching) {
-        if (postSelections[post.id] !== action.destination) continue;
-        delete postSelections[post.id];
+        const selected = selectedDestinations(state, post.id);
+        if (!selected.includes(action.destination)) continue;
+        const remaining = packSelection(selected.filter(d => d !== action.destination));
+        if (remaining) postSelections[post.id] = remaining;
+        else delete postSelections[post.id];
         changed = true;
       }
       return changed ? { ...state, postSelections, persistence: { ...state.persistence, status: 'unsaved', error: null } } : state;
@@ -281,6 +287,17 @@ export function reducer(state: AppState, action: Action): AppState {
         changed = true;
       }
       return changed ? { ...state, postSelections, persistence: { ...state.persistence, status: 'unsaved', error: null } } : state;
+    }
+    case 'TOGGLE_POST_DESTINATION': {
+      if (!Number.isSafeInteger(action.postId) || action.postId <= 0 || !state.destinationCategories.some(d => d.id === action.destination)) return state;
+      const selected = selectedDestinations(state, action.postId);
+      const removing = selected.includes(action.destination);
+      if (!removing && selected.length >= 2) return state;
+      const next = packSelection(removing ? selected.filter(d => d !== action.destination) : [...selected, action.destination]);
+      const postSelections = { ...state.postSelections };
+      if (next) postSelections[action.postId] = next;
+      else delete postSelections[action.postId];
+      return { ...state, postSelections, persistence: { ...state.persistence, status: 'unsaved', error: null } };
     }
     case 'SELECT_POST_DESTINATION': {
       if (!Number.isSafeInteger(action.postId) || action.postId <= 0) return state;

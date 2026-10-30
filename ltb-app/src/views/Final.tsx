@@ -51,7 +51,7 @@ function FinalCategory({ category, ready }: { category: DestinationId | 'all'; r
     <div class="ltb-final-controls">
       <label>Source type<select value={kind} onChange={e => { setKind(e.currentTarget.value); setLimit(60); setSearchLimit(30); }}><option value="all">Categories and tags</option><option value="category">Categories and mergers</option><option value="post_tag">Tags</option></select></label>
     </div>
-    <p class="ltb-muted">Only allowed tags are listed. Counts show posts that will receive each tag.{category === 'all' && ' Highlighted tags are allowed in at least one category; clicking removes them from every category.'}</p>
+    <p class="ltb-muted">Only allowed tags are listed. Counts show posts that will receive each tag. Posts selected for two categories retain tags allowed by either category.{category === 'all' && ' Highlighted tags are allowed in at least one category; clicking removes them from every category.'}</p>
     <div class="ltb-final-actions">
       <button class="ltb-btn" disabled={!filtered.some(group => group.selected)} onClick={() => setAllowed(visibleKeys, false)}>Drop shown</button>
       <button class="ltb-btn" disabled={!allowedGroups.length} onClick={() => setAllowed([...new Set(allowedGroups.flatMap(group => group.keys))], false)}>Clear allowed terms</button>

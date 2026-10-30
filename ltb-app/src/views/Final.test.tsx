@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, expect, it, vi } from 'vitest';
 import { StoreProvider, useStore } from '../state/provider';
 import { createInitialState, reducer } from '../state/reducer';
-import { getFinalPosts, getFinalTags, validateFinalTerms } from '../state/finalTerms';
+import { getFinalPosts, getFinalTags, getFinalTermGroups, validateFinalTerms } from '../state/finalTerms';
 import { normalizePost, normalizeTerm } from '../services/normalize';
 import { buildConfigDocument, localStorageAdapter, validateImport } from '../services/persistence';
 import { usePersistence } from '../effects/usePersistence';
@@ -101,7 +101,7 @@ it('round trips Final choices and preserves them when older imports omit the fie
   const s=fixture();s.finalTerms={'campus-life':['category:1','post_tag:2'],athletics:['post_tag:2']};
   const ctx={sourceUrl:s.source.baseUrl,excludedTermKeys:new Set<never>(),knownTermKeys:null};
   const doc=buildConfigDocument({...s,sourceUrl:s.source.baseUrl,tempFilters:{filters:s.tempFilters,activeId:s.activeTempFilterId}});
-  expect(doc.schemaVersion).toBe(3);
+  expect(doc.schemaVersion).toBe(4);
   const parsed=validateImport(JSON.parse(JSON.stringify(doc)),ctx);
   expect(createInitialState(s.source,parsed).finalTerms).toEqual(s.finalTerms);
   const legacy=validateImport({schemaVersion:2,assignments:{}},ctx);
@@ -219,4 +219,27 @@ it('always lists only allowed tags and adds search results without hiding the al
   search('');expect(host!.querySelector('.ltb-final-add button')).toBeNull();
   expect(store.state.postSelections).toBe(s.postSelections);
   expect(store.state.assignments).toBe(s.assignments);
+});
+
+it('unions allowed tags across both selected categories and counts each post once', () => {
+  const s = fixture();
+  s.postSelections = { 1: ['campus-life', 'athletics'] };
+  s.finalTerms = { 'campus-life': ['category:1'], athletics: ['post_tag:1', 'post_tag:2'] };
+  expect(getFinalPosts(s, 'campus-life').map(p => p.id)).toEqual([1]);
+  expect(getFinalPosts(s, 'athletics').map(p => p.id)).toEqual([1]);
+  expect(getFinalPosts(s, 'all').map(p => p.id)).toEqual([1]);
+  expect(getFinalTags(s, s.postsById[1]!).map(t => t.name)).toEqual(['Campus', 'Leaders']);
+  const all = getFinalTermGroups(s, 'all');
+  expect(all.groups.filter(g => g.selected).map(g => [g.name, g.count])).toEqual([['Campus', 1], ['Leaders', 1]]);
+  // Allowing a tag in Athletics does not silently select it in Campus Life's allowlist.
+  expect(getFinalTermGroups(s, 'campus-life').groups.find(g => g.name === 'Campus')!.selected).toBe(false);
+  mount(s, true);
+  const panel = host!.querySelector('.ltb-final-terms-panel')!;
+  expect(panel.textContent).toContain('Campus Life, Athletics');
+  expect(panel.querySelectorAll('.ltb-final-tags li')).toHaveLength(2);
+  expect(panel.querySelector('a[href="#/final/athletics"]')).not.toBeNull();
+  const withoutCampus = reducer(s, { type: 'TOGGLE_POST_DESTINATION', postId: 1, destination: 'campus-life' });
+  expect(getFinalTags(withoutCampus, s.postsById[1]!).map(t => t.name)).toEqual(['Campus', 'Leaders']);
+  s.mergers = [{ ...s.mergers[0]!, excludeFromFinal: true }];
+  expect(getFinalTags(s, s.postsById[1]!).map(t => t.name)).toEqual(['Campus']);
 });

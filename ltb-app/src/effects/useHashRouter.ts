@@ -1,13 +1,13 @@
 import { useEffect } from 'preact/hooks';
 import { isDestinationId } from '../state/destinations';
 import { useStore } from '../state/provider';
-import type { ConfigTab, DestinationId } from '../state/types';
+import type { ConfigTab, DestinationId, SelectionsCategory } from '../state/types';
 
 export type Route =
   | { view: 'final'; category: DestinationId | 'all' }
   | { view: 'mergers' }
   | { view: 'overview'; category: DestinationId | 'all' }
-  | { view: 'selections'; category: DestinationId | 'all' }
+  | { view: 'selections'; category: SelectionsCategory }
   | { view: 'config'; category: ConfigTab }
   | { view: 'article'; postId: number };
 
@@ -16,7 +16,7 @@ export function parseHash(hash: string): Route {
   const [head, arg] = parts;
   if (head === 'final') return { view: 'final', category: isDestinationId(arg) ? arg : 'all' };
   if (head === 'mergers') return { view: 'mergers' };
-  if (head === 'selections') return { view: 'selections', category: isDestinationId(arg) ? arg : 'all' };
+  if (head === 'selections') return { view: 'selections', category: isDestinationId(arg) || arg === 'uncategorized' ? arg : 'all' };
   if (head === 'config') return { view: 'config', category: isDestinationId(arg) || arg === 'unassigned' || arg === 'temp-filter' ? arg : 'campus-life' };
   if (head === 'article' && arg && /^\d+$/.test(arg)) return { view: 'article', postId: Number(arg) };
   return { view: 'overview', category: isDestinationId(arg) ? arg : 'all' };
@@ -49,7 +49,8 @@ export function useHashRouter() {
     const apply = () => {
       const route = parseHash(window.location.hash);
       if (route.view === 'overview' || route.view === 'selections') {
-        dispatch({ type: route.view === 'selections' ? 'SET_SELECTIONS_CATEGORY' : 'SET_OVERVIEW_CATEGORY', category: route.category });
+        if (route.view === 'selections') dispatch({ type: 'SET_SELECTIONS_CATEGORY', category: route.category });
+        else dispatch({ type: 'SET_OVERVIEW_CATEGORY', category: route.category });
         dispatch({ type: 'NAVIGATE', view: route.view });
       } else if (route.view === 'final') dispatch({ type: 'NAVIGATE', view: 'final', category: route.category });
       else if (route.view === 'mergers') dispatch({ type: 'NAVIGATE', view: 'mergers' });

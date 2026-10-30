@@ -1,3 +1,4 @@
+import { selectedDestinations } from '../state/postSelections';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { CopyToFinal } from '../components/CopyToFinal';
 import { PostCard } from '../components/PostCard';
@@ -17,7 +18,7 @@ import {
   getSelectionResults,
   getPostMatches,
 } from '../state/selectors';
-import type { DestinationId } from '../state/types';
+import type { DestinationId, SelectionsCategory } from '../state/types';
 
 export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selections' }) {
   const { state, dispatch } = useStore();
@@ -31,16 +32,17 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
   const counts = useMemo(() => Object.fromEntries(state.destinationCategories.map((d) => [
     d.id, (selections ? getSelectionResults(state, d.id) : getOverviewResults(state, d.id)).matching.length,
   ])) as Record<DestinationId, number>, [mode, state.destinationCategories, state.postSelections, state.postOrder, state.postsById, state.assignments, state.destinationExclusions, state.excludedTermKeys, state.tempFilters, state.activeTempFilterId, state.tempFilterEnabled]);
+  const uncategorizedCount = useMemo(() => selections ? getSelectionResults(state, 'uncategorized').matching.length : 0, [selections, state.postSelections, state.postOrder, state.postsById, state.tempFilters, state.activeTempFilterId, state.tempFilterEnabled]);
   const restored = useRef(false);
 
   // Everything below is derived locally from the complete post index.
   const { matching, primaryCount, emptyAssignment } = useMemo(
-    () => selections ? getSelectionResults(state, category) : getOverviewResults(state, category),
+    () => selections ? getSelectionResults(state, category) : getOverviewResults(state, state.ui.overviewCategory),
     [mode, state.postSelections, state.postOrder, state.postsById, state.assignments, state.destinationExclusions, state.excludedTermKeys, state.tempFilters, state.activeTempFilterId, state.tempFilterEnabled, category],
   );
   const shown = matching.slice(0, page * OVERVIEW_PAGE_SIZE);
   const hasMore = shown.length < matching.length;
-  const selectedCount = matching.filter((post) => state.postSelections[post.id] === category).length;
+  const selectedCount = matching.filter((post) => category !== 'all' && category !== 'uncategorized' && selectedDestinations(state, post.id).includes(category)).length;
   const allSelected = matching.length > 0 && selectedCount === matching.length;
   const unselectedCount = matching.filter((post) => state.postSelections[post.id] == null).length;
   const selectableCount = replaceExisting ? matching.length - selectedCount : unselectedCount;
@@ -63,15 +65,16 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
     return () => dispatch({ type: selections ? 'SET_SELECTIONS_SCROLL' : 'SET_OVERVIEW_SCROLL', scrollY: window.scrollY });
   }, [dispatch, selections]);
 
-  const select = (next: DestinationId | 'all') => {
+  const select = (next: SelectionsCategory) => {
     restored.current = true;
-    navigate({ view: mode, category: next });
+    if (selections) navigate({ view: 'selections', category: next });
+    else if (next !== 'uncategorized') navigate({ view: 'overview', category: next });
   };
 
-  const label = category === 'all' ? 'All Posts' : state.destinationCategories.find((d) => d.id === category)?.name;
+  const label = category === 'all' ? 'All Posts' : category === 'uncategorized' ? 'Uncategorized' : state.destinationCategories.find((d) => d.id === category)?.name;
   const countLabel = tempActive
     ? `${matching.length.toLocaleString()} of ${primaryCount.toLocaleString()} match ${activeFilter.name}`
-    : `${matching.length.toLocaleString()} ${category === 'all' ? '' : selections ? 'selected ' : 'matching '}post${matching.length === 1 ? '' : 's'}`;
+    : `${matching.length.toLocaleString()} ${category === 'all' ? '' : category === 'uncategorized' ? 'uncategorized ' : selections ? 'selected ' : 'matching '}post${matching.length === 1 ? '' : 's'}`;
   const progress = index.totalPages ? ` · loading ${index.loadedPages}/${index.totalPages} pages` : '';
 
   return (
@@ -95,9 +98,13 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
             </span>
           </button>
         ))}
+        {selections && <button type="button" class={'ltb-filter' + (category === 'uncategorized' ? ' is-active' : '')} aria-pressed={category === 'uncategorized'} onClick={() => select('uncategorized')}
+          title={'Posts with no destination selected' + (tempActive ? ' after temporary filtering' : '')}>
+          Uncategorized<span class="ltb-filter-count">{uncategorizedCount.toLocaleString()}{!bulkReady ? '+' : ''} posts</span>
+        </button>}
       </nav>
 
-      <p class="ltb-muted">{selections ? 'Posts grouped by the destination selected on each card.' : 'Posts matching Config rules. A post can match more than one destination.'}{tempActive ? ' Counts reflect the active temporary filter.' : ''}</p>
+      <p class="ltb-muted">{selections ? 'Posts grouped by their selected categories. Choose up to two categories per card; click a selected category to remove it.' : 'Posts matching Config rules. A post can match more than one destination.'}{tempActive ? ' Counts reflect the active temporary filter.' : ''}</p>
       {state.persistence.status === 'error' && <ErrorState message={state.persistence.error ?? 'Could not save selections.'} onRetry={() => dispatch({ type: 'PERSIST_STATUS', status: 'unsaved' })} />}
       {showTempBar && (
         <div class="ltb-temp-bar" role="region" aria-label="Temporary filter">
@@ -114,7 +121,7 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
         </div>
       )}
 
-      {!selections && category !== 'all' && <div class="ltb-final-actions"><CopyToFinal key={category} destination={category} /><a href={'#/final/' + category}>Review Final tags</a></div>}
+      {!selections && category !== 'all' && category !== 'uncategorized' && <div class="ltb-final-actions"><CopyToFinal key={category} destination={category} /><a href={'#/final/' + category}>Review Final tags</a></div>}
       <header class="ltb-results-header">
         <h2 id="ltb-overview-heading" class="ltb-h2">
           {label}
@@ -127,7 +134,7 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
         )}
       </header>
 
-      {category !== 'all' && (
+      {category !== 'all' && category !== 'uncategorized' && (
         <div class="ltb-bulk-selection">
           {!selections && <button type="button" class="ltb-btn ltb-btn-primary" disabled={!bulkReady || selectableCount === 0}
             onClick={() => dispatch({ type: 'SELECT_ALL_OVERVIEW', destination: category, replaceExisting })}>
@@ -165,7 +172,7 @@ export function Overview({ mode = 'overview' }: { mode?: 'overview' | 'selection
       ) : index.status === 'loading' && state.postOrder.length === 0 ? (
         <LoadingState label="Loading posts…" />
       ) : matching.length === 0 && index.complete ? (
-        <EmptyState title={tempActive ? "No posts in this category match the temporary filter." : selections ? "No posts have been selected for this destination yet." : "No published posts match the assigned terms."} />
+        <EmptyState title={tempActive ? "No posts in this category match the temporary filter." : category === 'uncategorized' ? "All posts have a destination category." : selections ? "No posts have been selected for this destination yet." : "No published posts match the assigned terms."} />
       ) : (
         <>
           <div class="ltb-grid">

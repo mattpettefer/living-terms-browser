@@ -21,7 +21,7 @@ export function ArticleView() {
   const selectGroup = useSelectTermGroup();
   const { post, request, retry } = useArticle(postId);
   const excluded = getExcludedSet(state);
-  const backHref = routeToHash({ view: state.ui.listView, category: state.ui.listView === 'selections' ? state.ui.selectionsCategory : state.ui.overviewCategory });
+  const backHref = routeToHash(state.ui.listView === 'selections' ? { view: 'selections', category: state.ui.selectionsCategory } : { view: 'overview', category: state.ui.overviewCategory });
 
   const content = useMemo(
     () => (post?.contentLoaded ? prepareContent(post.contentHtml ?? '', state.source.baseUrl, post.imageUrl) : null),

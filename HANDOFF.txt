@@ -41,3 +41,11 @@ This section supersedes the earlier validation and uncommitted-status notes.
 Final follows Mergers and uses explicit post selections, with separate allowed tags per destination. All categories combines tags into one list and removing a tag there removes it from every destination. Final always lists allowed tags, with a separate search to add unselected tags. Mergers display only their canonical name in Final and in the article's top-right final terms preview. Counts represent posts receiving an allowed tag. Copy from Overview preserves post selections. Configuration schema version 3 persists Final choices and merger definitions, including the optional excludeFromFinal flag; older imports preserve omitted settings.
 Merger ownership is exclusive, with explicit transfer controls. Shared terms in the merger post preview are the intersection across all unique posts. Editing a merger scrolls to the editor and focuses the name field.
 Validation: 134 tests across 17 files passed; TypeScript and production build passed. Rebuilt plugin assets accompany the source. The user requested committing and pushing these changes to origin/main.
+
+2026-10-30: Uncategorized and two destination selections
+- Selections includes Uncategorized (no explicitly selected destination), respecting temporary filters.
+- Cards toggle up to two categories; a third is disabled until one is removed. Both category lists include the post, All counts it once.
+- postSelections retains scalar values for one category and stores a two-item array for two. Export schema is now 4; older documents still import.
+- Bulk deselection clears only the requested category. Existing explicit Replace existing selections still replaces all choices.
+- Final tags are the union of tags allowed by either selected category, with canonical deduplication. The article preview shows both categories.
+- Empty mergers/new pseudo tags are on hold until the separate Enrichment phase. They are not part of this change.

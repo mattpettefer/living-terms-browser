@@ -1,3 +1,4 @@
+import { selectedDestinations } from '../state/postSelections';
 import { useStore } from '../state/provider';
 import { destinationName } from '../state/destinations';
 import type { DestinationId, PostRecord } from '../state/types';
@@ -17,7 +18,7 @@ export function formatDate(iso: string): string {
 
 export function PostCard({ post, imageUrl, matchedDestinations }: Props) {
   const { state, dispatch } = useStore();
-  const selected = state.postSelections[post.id];
+  const selected = selectedDestinations(state, post.id);
   const shortNames = ['Campus', 'Acad.', 'News', 'Alumni', 'Health', 'Athl.'];
   const excerpt = stripTags(post.excerptHtml);
   const href = routeToHash({ view: 'article', postId: post.id });
@@ -44,11 +45,12 @@ export function PostCard({ post, imageUrl, matchedDestinations }: Props) {
       </a>
       <div class="ltb-card-selection" role="group" aria-label={"Destination selection for " + post.title}>
         {state.destinationCategories.map((d, i) => (
-          <button key={d.id} type="button" class={"ltb-selection-button" + (selected === d.id ? " is-selected" : "")}
+          <button key={d.id} type="button" class={"ltb-selection-button" + (selected.includes(d.id) ? " is-selected" : "")}
             style={{ "--selection-color": "var(--ltb-dest-" + d.id + ")" }}
-            aria-label={d.name} aria-pressed={selected === d.id}
-            title={selected === d.id ? d.name + " selected — click to clear" : "Select " + d.name}
-            onClick={() => dispatch({ type: "SELECT_POST_DESTINATION", postId: post.id, destination: selected === d.id ? null : d.id })}>
+            aria-label={d.name} aria-pressed={selected.includes(d.id)}
+            disabled={selected.length >= 2 && !selected.includes(d.id)}
+            title={selected.includes(d.id) ? d.name + " selected — click to remove" : selected.length >= 2 ? "Two categories selected — remove one to choose another" : "Select " + d.name}
+            onClick={() => dispatch({ type: "TOGGLE_POST_DESTINATION", postId: post.id, destination: d.id })}>
             {shortNames[i]}
           </button>
         ))}

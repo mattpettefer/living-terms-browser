@@ -6,6 +6,8 @@ export type DestinationId =
   | 'health-wellness'
   | 'athletics';
 
+export type SelectionsCategory = DestinationId | 'all' | 'uncategorized';
+
 export type Taxonomy = 'category' | 'post_tag';
 export type TermKey = `${Taxonomy}:${number}`;
 export type RequestStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -72,7 +74,9 @@ export interface PostIndexState extends RequestState {
   fetchedAt: number | null;
 }
 
-export type PostSelections = Partial<Record<number, DestinationId>>;
+/** One category keeps the legacy scalar shape; two categories are saved together. */
+export type PostSelection = DestinationId | [DestinationId, DestinationId];
+export type PostSelections = Partial<Record<number, PostSelection>>;
 
 export type DestinationExclusions = Partial<Record<DestinationId, TermKey[]>>;
 
@@ -143,7 +147,7 @@ export interface AppState {
     view: 'overview' | 'selections' | 'config' | 'article' | 'mergers' | 'final';
     finalCategory: DestinationId | 'all';
     listView: 'overview' | 'selections';
-    selectionsCategory: DestinationId | 'all';
+    selectionsCategory: SelectionsCategory;
     selectionsPage: number;
     selectionsScrollY: number;
     overviewCategory: DestinationId | 'all';
