@@ -3,12 +3,16 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { buildConfigDocument, unwrapShortcode, validateImport, wrapAsShortcode } from '../services/persistence';
 import { markSeedApplied } from '../services/seed';
 import { useStore } from '../state/provider';
+import { buildMigrationDocument, newMigrationIdentity } from '../services/migration';
+import { usePostIndex } from '../effects/usePostIndex';
 
 type Mode = 'export' | 'import';
 type Message = { kind: 'ok' | 'error'; text: string };
 
 export function ImportExport() {
   const { state, dispatch } = useStore();
+  const { index, retry } = usePostIndex();
+  const [migrationJson, setMigrationJson] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
   const [replace, setReplace] = useState(true);
@@ -97,6 +101,12 @@ export function ImportExport() {
         <button type="button" class="ltb-btn" onClick={(e) => open('import', e)}>
           Import…
         </button>
+        <button type="button" class="ltb-btn" disabled={!state.termsInventory.complete || !index.complete} onClick={(e) => {
+          triggerRef.current = e.currentTarget;
+          try { setMigrationJson(JSON.stringify(buildMigrationDocument(state, newMigrationIdentity()), null, 2)); setMessage(null); }
+          catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : String(error) }); }
+        }}>Export migration…</button>
+        {index.status === 'error' && <button type="button" class="ltb-btn" onClick={retry}>Retry post index</button>}
         {state.pageSeed && (
           <button
             type="button"
@@ -132,6 +142,7 @@ export function ImportExport() {
       )}
 
       {mode === 'export' && <ExportDialog json={exportText()} onClose={close} />}
+      {migrationJson && <ExportDialog migration json={migrationJson} onClose={() => { setMigrationJson(null); requestAnimationFrame(() => triggerRef.current?.focus()); }} />}
       {mode === 'import' && (
         <ImportDialog
           replace={replace}
@@ -163,7 +174,7 @@ function useModal(onClose: () => void) {
   return { ref, onBackdropClick };
 }
 
-function ExportDialog({ json, onClose }: { json: string; onClose: () => void }) {
+function ExportDialog({ json, onClose, migration = false }: { json: string; onClose: () => void; migration?: boolean }) {
   const { ref, onBackdropClick } = useModal(onClose);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -185,10 +196,10 @@ function ExportDialog({ json, onClose }: { json: string; onClose: () => void }) 
   };
 
   const download = () => {
-    const blob = new Blob([json], { type: 'text/plain' });
+    const blob = new Blob([json], { type: migration ? 'application/json' : 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `living-term-mapping-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = migration ? `living-migration-${new Date().toISOString().slice(0, 10)}.json` : `living-term-mapping-${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -197,10 +208,10 @@ function ExportDialog({ json, onClose }: { json: string; onClose: () => void }) 
     <dialog ref={ref} class="ltb-dialog ltb-dialog-wide" aria-labelledby="ltb-export-title" onClick={onBackdropClick}>
       <div class="ltb-dialog-body">
         <h2 id="ltb-export-title" class="ltb-dialog-title">
-          Export configuration
+          {migration ? 'Export migration' : 'Export configuration'}
         </h2>
-        <p class="ltb-dialog-text">Ready to paste into a WordPress page as the shortcode, or into Import on another browser. Includes post selections, Final allowed tags, mergers, assignments, and temporary filters.</p>
-        <textarea ref={textRef} class="ltb-textarea" readOnly rows={14} value={json} aria-label="Configuration JSON" onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
+        <p class="ltb-dialog-text">{migration ? 'Paste this into Living Content Importer to save a server-side migration list. Includes every selected post with its resolved categories and final tags. It does not create posts.' : 'Ready to paste into a WordPress page as the shortcode, or into Import on another browser. Includes post selections, Final allowed tags, mergers, assignments, and temporary filters.'}</p>
+        <textarea ref={textRef} class="ltb-textarea" readOnly rows={14} value={json} aria-label={migration ? 'Migration JSON' : 'Configuration JSON'} onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
         {status && (
           <p class="ltb-muted ltb-dialog-status" role="status">
             {status}

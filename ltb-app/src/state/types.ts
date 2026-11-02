@@ -52,6 +52,8 @@ export interface PostRecord {
   date: string;
   modified: string;
   featuredMediaId: number;
+  /** Distinguishes explicit no-image (0) from a missing REST field. */
+  featuredMediaKnown?: boolean;
   imageUrl: string | null;
   termKeys: TermKey[];
   termsComplete: boolean;

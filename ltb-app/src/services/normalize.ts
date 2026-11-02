@@ -93,6 +93,7 @@ export function normalizePost(raw: WpPost): PostRecord {
     date: raw.date,
     modified: raw.modified,
     featuredMediaId: raw.featured_media ?? 0,
+    featuredMediaKnown: Number.isSafeInteger(raw.featured_media) && raw.featured_media! >= 0,
     imageUrl: pickImageUrl(raw),
     termKeys,
     termsComplete: hasCats && hasTags,
